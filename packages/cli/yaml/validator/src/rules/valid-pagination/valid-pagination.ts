@@ -168,12 +168,36 @@ export const ValidPaginationRule: Rule = {
     }
 };
 
-function resolvedTypeHasProperty(
-    typeResolver: TypeResolver,
-    file: FernFileContext,
-    resolvedType: ResolvedType | undefined,
-    propertyComponents: string[]
-): boolean {
+function validateCursorProperty({
+    typeResolver,
+    file,
+    resolvedType,
+    propertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType | undefined;
+    propertyComponents: string[];
+}): boolean {
+    return resolvedTypeHasProperty({
+        typeResolver,
+        file,
+        resolvedType,
+        propertyComponents
+    });
+}
+
+function resolvedTypeHasProperty({
+    typeResolver,
+    file,
+    resolvedType,
+    propertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType | undefined;
+    propertyComponents: string[];
+}): boolean {
     if (propertyComponents.length === 0) {
         return true;
     }
@@ -189,7 +213,12 @@ function resolvedTypeHasProperty(
         type: typeof property === "string" ? property : property.type,
         file
     });
-    return resolvedTypeHasProperty(typeResolver, file, resolvedTypeProperty, propertyComponents.slice(1));
+    return resolvedTypeHasProperty({
+        typeResolver,
+        file,
+        resolvedType: resolvedTypeProperty,
+        propertyComponents: propertyComponents.slice(1)
+    });
 }
 
 function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.ObjectSchema | undefined {
@@ -203,6 +232,19 @@ function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.O
         return maybeObjectSchema(resolvedType.container.itemType);
     }
     return undefined;
+}
+
+function isValidCursorType(resolvedType: ResolvedType | undefined): boolean {
+    return resolvedType?._type === "primitive" && resolvedType.primitive !== "BOOLEAN";
+}
+
+function isValidOffsetType(resolvedType: ResolvedType | undefined): boolean {
+    return (
+        resolvedType?._type === "primitive" &&
+        (resolvedType.primitive === "INTEGER" ||
+            resolvedType.primitive === "LONG" ||
+            resolvedType.primitive === "DOUBLE")
+    );
 }
 
 function getRequestPropertyComponents(value: string): string[] | undefined {
