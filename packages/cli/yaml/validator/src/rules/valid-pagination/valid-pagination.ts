@@ -431,7 +431,7 @@ function isValidResultsProperty({
         file,
         resolvedType,
         propertyComponents,
-        validator: () => true
+        validator: isValidResultsType
     });
 }
 
@@ -546,6 +546,10 @@ function isValidOffsetType(resolvedType: ResolvedType | undefined): boolean {
             resolvedType.primitive === "LONG" ||
             resolvedType.primitive === "DOUBLE")
     );
+}
+
+function isValidResultsType(resolvedType: ResolvedType | undefined): boolean {
+    return true;
 }
 
 function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.ObjectSchema | undefined {
