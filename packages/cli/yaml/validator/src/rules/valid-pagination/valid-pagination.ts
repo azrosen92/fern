@@ -13,6 +13,24 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
 
+// TODO: Update these IDs to match the latest schema.
+const CURSOR_ID = "page";
+const OFFSET_ID = "page";
+const NEXT_CURSOR_ID = "next";
+const RESULTS_ID = "results";
+
+type PropertyValidatorFunc = ({
+    typeResolver,
+    file,
+    resolvedType,
+    propertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType | undefined;
+    propertyComponents: string[];
+}) => boolean;
+
 export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
     create: ({ workspace }) => {
@@ -96,7 +114,7 @@ function validateCursorPagination({
     }
 
     violations.push(
-        ...validateNextProperty({
+        ...validateNextCursorProperty({
             endpointId,
             typeResolver,
             file,
@@ -178,74 +196,15 @@ function validatePageProperty({
     file: FernFileContext;
     cursorPagination: RawSchemas.CursorPaginationSchema;
 }): RuleViolation[] {
-    const violations: RuleViolation[] = [];
-
-    const pagePropertyComponents = getRequestPropertyComponents(cursorPagination.page);
-    if (pagePropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
-        });
-        return violations;
-    }
-
-    const queryPropertyName = pagePropertyComponents?.[0];
-    if (queryPropertyName == null || pagePropertyComponents.length !== 1) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} is only compatible with 'page' properties that are defined as query parameters (e.g $request.cursor).`
-        });
-        return violations;
-    }
-
-    const queryParameters = typeof endpoint.request !== "string" ? endpoint.request?.["query-parameters"] : null;
-    if (queryParameters == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} is only compatible with in-lined request bodies that define at least one query parameter.`
-        });
-        return violations;
-    }
-
-    const queryParameter = queryParameters[queryPropertyName];
-    if (queryParameter == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
-                cursorPagination.page
-            }, but that query parameter does not exist.`
-        });
-        return violations;
-    }
-
-    const queryParameterType = typeof queryParameter !== "string" ? queryParameter.type : queryParameter;
-    const resolvedQueryParameterType = typeResolver.resolveType({
-        type: queryParameterType,
-        file
+    return validateQueryParameterProperty({
+        endpointId,
+        endpoint,
+        typeResolver,
+        file,
+        queryParameterProperty: cursorPagination.page,
+        queryParameterPropertyID: CURSOR_ID,
+        validateProperty: isValidCursorProperty
     });
-    if (
-        !isValidCursorProperty({
-            typeResolver,
-            file,
-            resolvedType: resolvedQueryParameterType,
-            propertyComponents: pagePropertyComponents.slice(1)
-        })
-    ) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
-                cursorPagination.page
-            }, which is not a valid page type.`
-        });
-    }
-
-    return violations;
 }
 
 function validateOffsetProperty({
@@ -261,26 +220,102 @@ function validateOffsetProperty({
     file: FernFileContext;
     offsetPagination: RawSchemas.OffsetPaginationSchema;
 }): RuleViolation[] {
+    return validateQueryParameterProperty({
+        endpointId,
+        endpoint,
+        typeResolver,
+        file,
+        queryParameterProperty: offsetPagination.page,
+        queryParameterPropertyID: OFFSET_ID,
+        validateProperty: isValidOffsetProperty
+    });
+}
+
+function validateNextCursorProperty({
+    endpointId,
+    typeResolver,
+    file,
+    resolvedResponseType,
+    nextProperty
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedResponseType: ResolvedType;
+    nextProperty: string;
+}): RuleViolation[] {
+    return validateResponseProperty({
+        endpointId,
+        typeResolver,
+        file,
+        resolvedResponseType,
+        responseProperty: nextProperty,
+        responsePropertyID: NEXT_CURSOR_ID,
+        validateProperty: isValidCursorProperty
+    });
+}
+
+function validateResultsProperty({
+    endpointId,
+    typeResolver,
+    file,
+    resolvedResponseType,
+    resultsProperty
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedResponseType: ResolvedType;
+    resultsProperty: string;
+}): RuleViolation[] {
+    return validateResponseProperty({
+        endpointId,
+        typeResolver,
+        file,
+        resolvedResponseType,
+        responseProperty: resultsProperty,
+        responsePropertyID: RESULTS_ID,
+        validateProperty: isValidResultsProperty
+    });
+}
+
+function validateQueryParameterProperty({
+    endpointId,
+    endpoint,
+    typeResolver,
+    file,
+    queryParameterProperty,
+    queryParameterPropertyID,
+    validateProperty
+}: {
+    endpointId: string;
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    queryParameterProperty: string;
+    queryParameterPropertyID: string;
+    validateProperty: PropertyValidatorFunc;
+}): RuleViolation[] {
     const violations: RuleViolation[] = [];
 
-    const pagePropertyComponents = getRequestPropertyComponents(offsetPagination.page);
-    if (pagePropertyComponents == null) {
+    const queryPropertyComponents = getRequestPropertyComponents(queryParameterProperty);
+    if (queryPropertyComponents == null) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
+            )} must define a dot-delimited '${queryParameterPropertyID}' property starting with $request (e.g $request.${queryParameterPropertyID}).`
         });
         return violations;
     }
 
-    const queryPropertyName = pagePropertyComponents?.[0];
-    if (queryPropertyName == null || pagePropertyComponents.length !== 1) {
+    const queryPropertyName = queryPropertyComponents?.[0];
+    if (queryPropertyName == null || queryPropertyComponents.length !== 1) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} is only compatible with 'page' properties that are defined as query parameters (e.g $request.cursor).`
+            )} is only compatible with '${queryParameterPropertyID}' properties that are defined as query parameters (e.g $request.${queryParameterPropertyID}).`
         });
         return violations;
     }
@@ -300,9 +335,9 @@ function validateOffsetProperty({
     if (queryParameter == null) {
         violations.push({
             severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
-                offsetPagination.page
-            }, but that query parameter does not exist.`
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} specifies '${queryParameterPropertyID}' ${queryParameterProperty}, but that query parameter does not exist.`
         });
         return violations;
     }
@@ -313,108 +348,67 @@ function validateOffsetProperty({
         file
     });
     if (
-        !isValidOffsetProperty({
+        !validateProperty({
             typeResolver,
             file,
             resolvedType: resolvedQueryParameterType,
-            propertyComponents: pagePropertyComponents.slice(1)
+            propertyComponents: queryPropertyComponents.slice(1)
         })
     ) {
         violations.push({
             severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
-                offsetPagination.page
-            }, which is not a valid page type.`
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} specifies '${queryParameterPropertyID}' ${queryParameterProperty}, which is not a valid ${queryParameterPropertyID} type.`
         });
     }
 
     return violations;
 }
 
-function validateNextProperty({
+function validateResponseProperty({
     endpointId,
     typeResolver,
     file,
     resolvedResponseType,
-    nextProperty
+    responseProperty,
+    responsePropertyID,
+    validateProperty
 }: {
     endpointId: string;
     typeResolver: TypeResolver;
     file: FernFileContext;
     resolvedResponseType: ResolvedType;
-    nextProperty: string;
+    responseProperty: string;
+    responsePropertyID: string;
+    validateProperty: PropertyValidatorFunc;
 }): RuleViolation[] {
     const violations: RuleViolation[] = [];
 
-    const nextPropertyComponents = getResponsePropertyComponents(nextProperty);
-    if (nextPropertyComponents == null) {
+    const responsePropertyComponents = getResponsePropertyComponents(responseProperty);
+    if (responsePropertyComponents == null) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
+            )} must define a dot-delimited '${responsePropertyID}' property starting with $response (e.g $response.${responsePropertyID}).`
         });
     }
 
     if (
-        nextPropertyComponents != null &&
-        !isValidCursorProperty({
+        responsePropertyComponents != null &&
+        !validateProperty({
             typeResolver,
             file,
             resolvedType: resolvedResponseType,
-            propertyComponents: nextPropertyComponents
+            propertyComponents: responsePropertyComponents
         })
     ) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} specifies 'next' ${nextProperty}, which is not specified as a response property.`
-        });
-    }
-
-    return violations;
-}
-
-function validateResultsProperty({
-    endpointId,
-    typeResolver,
-    file,
-    resolvedResponseType,
-    resultsProperty
-}: {
-    endpointId: string;
-    typeResolver: TypeResolver;
-    file: FernFileContext;
-    resolvedResponseType: ResolvedType;
-    resultsProperty: string;
-}): RuleViolation[] {
-    const violations: RuleViolation[] = [];
-
-    const resultsPropertyComponents = getResponsePropertyComponents(resultsProperty);
-    if (resultsPropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
-        });
-    }
-
-    if (
-        resultsPropertyComponents != null &&
-        !isValidResultsProperty({
-            typeResolver,
-            file,
-            resolvedType: resolvedResponseType,
-            propertyComponents: resultsPropertyComponents
-        })
-    ) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} specifies 'results' ${resultsProperty}, which is not specified as a response property.`
+            )} specifies '${responsePropertyID}' ${responseProperty}, which is not specified as a response property.`
         });
     }
 
