@@ -12,9 +12,6 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
-const CURSOR_PROPERTY_ID = REQUEST_PREFIX + "cursor";
-const NEXT_CURSOR_PROPERTY_ID = RESPONSE_PREFIX + "next";
-const RESULTS_PROPERTY_ID = RESPONSE_PREFIX + "results";
 
 export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
@@ -88,13 +85,32 @@ function validateCursorPagination({
         })
     );
 
+    const resolvedResponseType = resolveResponseType({ endpoint, typeResolver, file });
+    if (resolvedResponseType == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} must define a response type.`
+        });
+        return violations;
+    }
+
     violations.push(
-        ...validateCursorResponseProperties({
+        ...validateNextProperty({
             endpointId,
-            endpoint,
             typeResolver,
             file,
-            cursorPagination
+            resolvedResponseType,
+            nextProperty: cursorPagination.next
+        })
+    );
+
+    violations.push(
+        ...validateResultsProperty({
+            endpointId,
+            typeResolver,
+            file,
+            resolvedResponseType,
+            resultsProperty: cursorPagination.results
         })
     );
 
@@ -184,22 +200,22 @@ function validatePageProperty({
     return violations;
 }
 
-function validateCursorResponseProperties({
+function validateNextProperty({
     endpointId,
-    endpoint,
     typeResolver,
     file,
-    cursorPagination
+    resolvedResponseType,
+    nextProperty
 }: {
     endpointId: string;
-    endpoint: RawSchemas.HttpEndpointSchema;
     typeResolver: TypeResolver;
     file: FernFileContext;
-    cursorPagination: RawSchemas.CursorPaginationSchema;
+    resolvedResponseType: ResolvedType;
+    nextProperty: string;
 }): RuleViolation[] {
     const violations: RuleViolation[] = [];
 
-    const nextPropertyComponents = getResponsePropertyComponents(cursorPagination.next);
+    const nextPropertyComponents = getResponsePropertyComponents(nextProperty);
     if (nextPropertyComponents == null) {
         violations.push({
             severity: "error",
@@ -209,37 +225,8 @@ function validateCursorResponseProperties({
         });
     }
 
-    const resultsPropertyComponents = getResponsePropertyComponents(cursorPagination.results);
-    if (resultsPropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
-        });
-    }
-
-    const responseType = typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
-    if (responseType == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} is only compatible with endpoints that define a response.`
-        });
-        return violations;
-    }
-
-    if (nextPropertyComponents == null || resultsPropertyComponents == null) {
-        return violations;
-    }
-
-    const resolvedResponseType = typeResolver.resolveType({
-        type: responseType,
-        file
-    });
-
     if (
+        nextPropertyComponents != null &&
         !isValidCursorProperty({
             typeResolver,
             file,
@@ -249,13 +236,42 @@ function validateCursorResponseProperties({
     ) {
         violations.push({
             severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'next' ${
-                cursorPagination.next
-            }, which is not specified as a response property.`
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} specifies 'next' ${nextProperty}, which is not specified as a response property.`
+        });
+    }
+
+    return violations;
+}
+
+function validateResultsProperty({
+    endpointId,
+    typeResolver,
+    file,
+    resolvedResponseType,
+    resultsProperty
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedResponseType: ResolvedType;
+    resultsProperty: string;
+}): RuleViolation[] {
+    const violations: RuleViolation[] = [];
+
+    const resultsPropertyComponents = getResponsePropertyComponents(resultsProperty);
+    if (resultsPropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
         });
     }
 
     if (
+        resultsPropertyComponents != null &&
         !isValidResponseProperty({
             typeResolver,
             file,
@@ -265,9 +281,9 @@ function validateCursorResponseProperties({
     ) {
         violations.push({
             severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'results' ${
-                cursorPagination.results
-            }, which is not specified as a response property.`
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} specifies 'results' ${resultsProperty}, which is not specified as a response property.`
         });
     }
 
@@ -383,6 +399,25 @@ function resolvedTypeHasProperty({
         resolvedType: resolvedTypeProperty,
         propertyComponents: propertyComponents.slice(1),
         validator
+    });
+}
+
+function resolveResponseType({
+    endpoint,
+    typeResolver,
+    file
+}: {
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+}): ResolvedType | undefined {
+    const responseType = typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
+    if (responseType == null) {
+        return undefined;
+    }
+    return typeResolver.resolveType({
+        type: responseType,
+        file
     });
 }
 

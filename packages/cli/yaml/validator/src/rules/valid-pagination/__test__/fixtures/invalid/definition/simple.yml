@@ -47,4 +47,4 @@ service:
             docs: | 
               The cursor used for pagination in order to fetch 
               the next page of results.
-      response: ListUsersRequest
+      response: ListUsersResponse
