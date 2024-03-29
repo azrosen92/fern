@@ -5,7 +5,7 @@ import {
     TypeResolver,
     TypeResolverImpl
 } from "@fern-api/ir-generator";
-import { isRawObjectDefinition } from "@fern-api/yaml-schema";
+import { isRawObjectDefinition, RawSchemas } from "@fern-api/yaml-schema";
 import chalk from "chalk";
 import { Rule, RuleViolation } from "../../Rule";
 import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
@@ -19,13 +19,17 @@ export const ValidPaginationRule: Rule = {
         const typeResolver = new TypeResolverImpl(workspace);
         const defaultPagination = workspace.definition.rootApiFile.contents.pagination;
 
+        // TODO: We also need to verify that the cursor, page, and offset properties are primitives.
+        // TODO: Split this out into separate functions, one for each pagination property.
         return {
             definitionFile: {
                 httpEndpoint: ({ endpointId, endpoint }, { relativeFilepath, contents: definitionFile }) => {
+                    const violations: RuleViolation[] = [];
+
                     const endpointPagination =
                         typeof endpoint.pagination === "boolean" ? defaultPagination : endpoint.pagination;
                     if (!endpointPagination) {
-                        return [];
+                        return violations;
                     }
 
                     const file = constructFernFileContext({
@@ -34,8 +38,6 @@ export const ValidPaginationRule: Rule = {
                         casingsGenerator: CASINGS_GENERATOR,
                         rootApiFile: workspace.definition.rootApiFile.contents
                     });
-
-                    const violations: RuleViolation[] = [];
 
                     const pagePropertyComponents = getRequestPropertyComponents(endpointPagination.page);
                     if (pagePropertyComponents == null) {
@@ -175,11 +177,11 @@ function resolvedTypeHasProperty(
     if (propertyComponents.length === 0) {
         return true;
     }
-    resolvedType = maybeNamedType(resolvedType);
-    if (resolvedType == null || resolvedType._type !== "named" || !isRawObjectDefinition(resolvedType.declaration)) {
+    const objectSchema = maybeObjectSchema(resolvedType);
+    if (objectSchema == null) {
         return false;
     }
-    const property = resolvedType.declaration.properties?.[propertyComponents[0] ?? ""];
+    const property = objectSchema.properties?.[propertyComponents[0] ?? ""];
     if (property == null) {
         return false;
     }
@@ -190,15 +192,15 @@ function resolvedTypeHasProperty(
     return resolvedTypeHasProperty(typeResolver, file, resolvedTypeProperty, propertyComponents.slice(1));
 }
 
-function maybeNamedType(resolvedType: ResolvedType | undefined): ResolvedType | undefined {
+function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.ObjectSchema | undefined {
     if (resolvedType == null) {
         return undefined;
     }
-    if (resolvedType._type === "named") {
-        return resolvedType;
+    if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
+        return resolvedType.declaration;
     }
     if (resolvedType._type === "container" && resolvedType.container._type === "optional") {
-        return maybeNamedType(resolvedType.container.itemType);
+        return maybeObjectSchema(resolvedType.container.itemType);
     }
     return undefined;
 }
