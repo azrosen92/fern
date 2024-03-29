@@ -110,7 +110,12 @@ export const ValidPaginationRule: Rule = {
 
                     if (
                         endpointPagination.type === "cursor" &&
-                        !resolvedTypeHasProperty(typeResolver, file, resolvedResponseType, nextPropertyComponents)
+                        !isValidCursorProperty({
+                            typeResolver,
+                            file,
+                            resolvedType: resolvedResponseType,
+                            propertyComponents: nextPropertyComponents
+                        })
                     ) {
                         violations.push({
                             severity: "error",
@@ -120,7 +125,14 @@ export const ValidPaginationRule: Rule = {
                         });
                     }
 
-                    if (!resolvedTypeHasProperty(typeResolver, file, resolvedResponseType, resultsPropertyComponents)) {
+                    if (
+                        !isValidResponseProperty({
+                            typeResolver,
+                            file,
+                            resolvedType: resolvedResponseType,
+                            propertyComponents: resultsPropertyComponents
+                        })
+                    ) {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
@@ -142,12 +154,12 @@ export const ValidPaginationRule: Rule = {
                             file
                         });
                         if (
-                            !resolvedTypeHasProperty(
+                            !isValidCursorProperty({
                                 typeResolver,
                                 file,
-                                resolvedQueryParameterType,
-                                pagePropertyComponents.slice(1)
-                            )
+                                resolvedType: resolvedQueryParameterType,
+                                propertyComponents: pagePropertyComponents.slice(1)
+                            })
                         ) {
                             violations.push({
                                 severity: "error",
@@ -168,7 +180,7 @@ export const ValidPaginationRule: Rule = {
     }
 };
 
-function validateCursorProperty({
+function isValidResponseProperty({
     typeResolver,
     file,
     resolvedType,
@@ -183,11 +195,12 @@ function validateCursorProperty({
         typeResolver,
         file,
         resolvedType,
-        propertyComponents
+        propertyComponents,
+        validator: () => true
     });
 }
 
-function resolvedTypeHasProperty({
+function isValidOffsetProperty({
     typeResolver,
     file,
     resolvedType,
@@ -198,8 +211,50 @@ function resolvedTypeHasProperty({
     resolvedType: ResolvedType | undefined;
     propertyComponents: string[];
 }): boolean {
+    return resolvedTypeHasProperty({
+        typeResolver,
+        file,
+        resolvedType,
+        propertyComponents,
+        validator: isValidOffsetType
+    });
+}
+
+function isValidCursorProperty({
+    typeResolver,
+    file,
+    resolvedType,
+    propertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType | undefined;
+    propertyComponents: string[];
+}): boolean {
+    return resolvedTypeHasProperty({
+        typeResolver,
+        file,
+        resolvedType,
+        propertyComponents,
+        validator: isValidCursorType
+    });
+}
+
+function resolvedTypeHasProperty({
+    typeResolver,
+    file,
+    resolvedType,
+    propertyComponents,
+    validator
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType | undefined;
+    propertyComponents: string[];
+    validator: (resolvedType: ResolvedType | undefined) => boolean;
+}): boolean {
     if (propertyComponents.length === 0) {
-        return true;
+        return validator(resolvedType);
     }
     const objectSchema = maybeObjectSchema(resolvedType);
     if (objectSchema == null) {
@@ -217,8 +272,26 @@ function resolvedTypeHasProperty({
         typeResolver,
         file,
         resolvedType: resolvedTypeProperty,
-        propertyComponents: propertyComponents.slice(1)
+        propertyComponents: propertyComponents.slice(1),
+        validator
     });
+}
+
+function isValidCursorType(resolvedType: ResolvedType | undefined): boolean {
+    const primitiveType = maybePrimitiveType(resolvedType);
+    if (primitiveType == null) {
+        return false;
+    }
+    return primitiveType !== "BOOLEAN";
+}
+
+function isValidOffsetType(resolvedType: ResolvedType | undefined): boolean {
+    return (
+        resolvedType?._type === "primitive" &&
+        (resolvedType.primitive === "INTEGER" ||
+            resolvedType.primitive === "LONG" ||
+            resolvedType.primitive === "DOUBLE")
+    );
 }
 
 function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.ObjectSchema | undefined {
@@ -234,17 +307,14 @@ function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.O
     return undefined;
 }
 
-function isValidCursorType(resolvedType: ResolvedType | undefined): boolean {
-    return resolvedType?._type === "primitive" && resolvedType.primitive !== "BOOLEAN";
-}
-
-function isValidOffsetType(resolvedType: ResolvedType | undefined): boolean {
-    return (
-        resolvedType?._type === "primitive" &&
-        (resolvedType.primitive === "INTEGER" ||
-            resolvedType.primitive === "LONG" ||
-            resolvedType.primitive === "DOUBLE")
-    );
+function maybePrimitiveType(resolvedType: ResolvedType | undefined): string | undefined {
+    if (resolvedType?._type === "primitive") {
+        return resolvedType.primitive;
+    }
+    if (resolvedType?._type === "container" && resolvedType.container._type === "optional") {
+        return maybePrimitiveType(resolvedType.container.itemType);
+    }
+    return undefined;
 }
 
 function getRequestPropertyComponents(value: string): string[] | undefined {
