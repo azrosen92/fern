@@ -60,142 +60,6 @@ export const ValidPaginationRule: Rule = {
                             });
                         }
                     }
-
-                    const pagePropertyComponents = getRequestPropertyComponents(endpointPagination.page);
-                    if (pagePropertyComponents == null) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpointId
-                            )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
-                        });
-                    }
-
-                    let nextPropertyComponents: string[] | undefined;
-                    if (endpointPagination.type === "cursor") {
-                        nextPropertyComponents = getResponsePropertyComponents(endpointPagination?.next);
-                        if (nextPropertyComponents == null) {
-                            violations.push({
-                                severity: "error",
-                                message: `Pagination configuration for endpoint ${chalk.bold(
-                                    endpointId
-                                )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
-                            });
-                        }
-                    }
-
-                    const resultsPropertyComponents = getResponsePropertyComponents(endpointPagination.results);
-                    if (resultsPropertyComponents == null) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpointId
-                            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
-                        });
-                    }
-
-                    if (
-                        pagePropertyComponents == null ||
-                        nextPropertyComponents == null ||
-                        resultsPropertyComponents == null
-                    ) {
-                        return violations;
-                    }
-
-                    const queryParameters =
-                        typeof endpoint.request !== "string" ? endpoint.request?.["query-parameters"] : null;
-                    if (queryParameters == null) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpointId
-                            )} is only compatible with in-lined request bodies that define at least one query parameter.`
-                        });
-                        return violations;
-                    }
-
-                    const responseType =
-                        typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
-                    if (responseType == null) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpointId
-                            )} is only compatible with endpoints that define a response.`
-                        });
-                        return violations;
-                    }
-                    const resolvedResponseType = typeResolver.resolveType({
-                        type: responseType,
-                        file
-                    });
-
-                    if (
-                        endpointPagination.type === "cursor" &&
-                        !isValidCursorProperty({
-                            typeResolver,
-                            file,
-                            resolvedType: resolvedResponseType,
-                            propertyComponents: nextPropertyComponents
-                        })
-                    ) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies next ${
-                                endpointPagination.next
-                            }, which is not specified as a response property.`
-                        });
-                    }
-
-                    if (
-                        !isValidResponseProperty({
-                            typeResolver,
-                            file,
-                            resolvedType: resolvedResponseType,
-                            propertyComponents: resultsPropertyComponents
-                        })
-                    ) {
-                        violations.push({
-                            severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpointId
-                            )} specifies results ${
-                                endpointPagination.results
-                            }, which is not specified as a response property.`
-                        });
-                    }
-
-                    for (const [queryParameterKey, queryParameter] of Object.entries(queryParameters)) {
-                        if (queryParameterKey !== pagePropertyComponents[0]) {
-                            continue;
-                        }
-                        const queryParameterType =
-                            typeof queryParameter !== "string" ? queryParameter.type : queryParameter;
-                        const resolvedQueryParameterType = typeResolver.resolveType({
-                            type: queryParameterType,
-                            file
-                        });
-                        if (
-                            !isValidCursorProperty({
-                                typeResolver,
-                                file,
-                                resolvedType: resolvedQueryParameterType,
-                                propertyComponents: pagePropertyComponents.slice(1)
-                            })
-                        ) {
-                            violations.push({
-                                severity: "error",
-                                message: `Pagination configuration for endpoint ${chalk.bold(
-                                    endpointId
-                                )} specifies page ${
-                                    endpointPagination.page
-                                }, which is not specified as a query-parameter.`
-                            });
-                        }
-                        break;
-                    }
-
-                    return violations;
                 }
             }
         };
@@ -204,16 +68,167 @@ export const ValidPaginationRule: Rule = {
 
 function validateCursorPagination({
     endpointId,
+    endpoint,
     typeResolver,
     file,
     cursorPagination
 }: {
     endpointId: string;
+    endpoint: RawSchemas.HttpEndpointSchema;
     typeResolver: TypeResolver;
     file: FernFileContext;
     cursorPagination: RawSchemas.CursorPaginationSchema;
 }): RuleViolation[] {
-    return [];
+    const violations: RuleViolation[] = [];
+
+    violations.push(
+        ...validatePageProperty({
+            endpointId,
+            endpoint,
+            typeResolver,
+            file,
+            cursorPagination
+        })
+    );
+
+    const nextPropertyComponents = getResponsePropertyComponents(cursorPagination.next);
+    if (nextPropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
+        });
+    }
+    const resultsPropertyComponents = getResponsePropertyComponents(cursorPagination.results);
+    if (resultsPropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
+        });
+    }
+
+    const responseType = typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
+    if (responseType == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} is only compatible with endpoints that define a response.`
+        });
+        return violations;
+    }
+
+    if (pagePropertyComponents == null || nextPropertyComponents == null || resultsPropertyComponents == null) {
+        return violations;
+    }
+
+    const resolvedResponseType = typeResolver.resolveType({
+        type: responseType,
+        file
+    });
+
+    if (
+        !isValidCursorProperty({
+            typeResolver,
+            file,
+            resolvedType: resolvedResponseType,
+            propertyComponents: nextPropertyComponents
+        })
+    ) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies next ${
+                cursorPagination.next
+            }, which is not specified as a response property.`
+        });
+    }
+
+    if (
+        !isValidResponseProperty({
+            typeResolver,
+            file,
+            resolvedType: resolvedResponseType,
+            propertyComponents: resultsPropertyComponents
+        })
+    ) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies results ${
+                cursorPagination.results
+            }, which is not specified as a response property.`
+        });
+    }
+
+    return violations;
+}
+
+function validatePageProperty({
+    endpointId,
+    endpoint,
+    typeResolver,
+    file,
+    cursorPagination
+}: {
+    endpointId: string;
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    cursorPagination: RawSchemas.CursorPaginationSchema;
+}): RuleViolation[] {
+    const violations: RuleViolation[] = [];
+    const pagePropertyComponents = getRequestPropertyComponents(cursorPagination.page);
+    if (pagePropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
+        });
+    }
+    const queryParameters = typeof endpoint.request !== "string" ? endpoint.request?.["query-parameters"] : null;
+    if (queryParameters == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} is only compatible with in-lined request bodies that define at least one query parameter.`
+        });
+        return violations;
+    }
+    if (pagePropertyComponents == null) {
+        return violations;
+    }
+    // TODO: Can we clean this up?
+    for (const [queryParameterKey, queryParameter] of Object.entries(queryParameters)) {
+        if (queryParameterKey !== pagePropertyComponents[0]) {
+            continue;
+        }
+        const queryParameterType = typeof queryParameter !== "string" ? queryParameter.type : queryParameter;
+        const resolvedQueryParameterType = typeResolver.resolveType({
+            type: queryParameterType,
+            file
+        });
+        if (
+            !isValidCursorProperty({
+                typeResolver,
+                file,
+                resolvedType: resolvedQueryParameterType,
+                propertyComponents: pagePropertyComponents.slice(1)
+            })
+        ) {
+            violations.push({
+                severity: "error",
+                message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies page ${
+                    cursorPagination.page
+                }, which is not specified as a query-parameter.`
+            });
+        }
+        break;
+    }
+    return violations;
 }
 
 function validateOffsetPagination({
@@ -227,6 +242,7 @@ function validateOffsetPagination({
     file: FernFileContext;
     offsetPagination: RawSchemas.OffsetPaginationSchema;
 }): RuleViolation[] {
+    // TODO: Implement this.
     return [];
 }
 
