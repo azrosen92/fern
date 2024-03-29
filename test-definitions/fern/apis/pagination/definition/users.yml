@@ -39,7 +39,7 @@ service:
       # TODO: Update this with the new pagination syntax.
       pagination: 
         type: cursor
-        page: $query.starting_after
+        page: $request.starting_after
         next: $response.pages.next.starting_after
         results: $response.data
       method: GET

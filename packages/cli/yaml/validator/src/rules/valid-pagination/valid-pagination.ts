@@ -21,7 +21,7 @@ export const ValidPaginationRule: Rule = {
 
         return {
             definitionFile: {
-                httpEndpoint: ({ endpoint }, { relativeFilepath, contents: definitionFile }) => {
+                httpEndpoint: ({ endpointId, endpoint }, { relativeFilepath, contents: definitionFile }) => {
                     const endpointPagination =
                         typeof endpoint.pagination === "boolean" ? defaultPagination : endpoint.pagination;
                     if (!endpointPagination) {
@@ -42,7 +42,7 @@ export const ValidPaginationRule: Rule = {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
+                                endpointId
                             )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
                         });
                     }
@@ -54,7 +54,7 @@ export const ValidPaginationRule: Rule = {
                             violations.push({
                                 severity: "error",
                                 message: `Pagination configuration for endpoint ${chalk.bold(
-                                    endpoint.path
+                                    endpointId
                                 )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
                             });
                         }
@@ -65,7 +65,7 @@ export const ValidPaginationRule: Rule = {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
+                                endpointId
                             )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
                         });
                     }
@@ -84,7 +84,7 @@ export const ValidPaginationRule: Rule = {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
+                                endpointId
                             )} is only compatible with in-lined request bodies that define at least one query parameter.`
                         });
                         return violations;
@@ -96,7 +96,7 @@ export const ValidPaginationRule: Rule = {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
+                                endpointId
                             )} is only compatible with endpoints that define a response.`
                         });
                         return violations;
@@ -112,9 +112,7 @@ export const ValidPaginationRule: Rule = {
                     ) {
                         violations.push({
                             severity: "error",
-                            message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
-                            )} specifies next ${
+                            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies next ${
                                 endpointPagination.next
                             }, which is not specified as a response property.`
                         });
@@ -124,7 +122,7 @@ export const ValidPaginationRule: Rule = {
                         violations.push({
                             severity: "error",
                             message: `Pagination configuration for endpoint ${chalk.bold(
-                                endpoint.path
+                                endpointId
                             )} specifies results ${
                                 endpointPagination.results
                             }, which is not specified as a response property.`
@@ -152,7 +150,7 @@ export const ValidPaginationRule: Rule = {
                             violations.push({
                                 severity: "error",
                                 message: `Pagination configuration for endpoint ${chalk.bold(
-                                    endpoint.path
+                                    endpointId
                                 )} specifies page ${
                                     endpointPagination.page
                                 }, which is not specified as a query-parameter.`
@@ -174,17 +172,14 @@ function resolvedTypeHasProperty(
     resolvedType: ResolvedType | undefined,
     propertyComponents: string[]
 ): boolean {
-    if (resolvedType == null) {
-        return false;
-    }
     if (propertyComponents.length === 0) {
         return true;
     }
-    const propertyComponent = propertyComponents[0] ?? "";
-    if (resolvedType._type !== "named" || !isRawObjectDefinition(resolvedType.declaration)) {
+    resolvedType = maybeNamedType(resolvedType);
+    if (resolvedType == null || resolvedType._type !== "named" || !isRawObjectDefinition(resolvedType.declaration)) {
         return false;
     }
-    const property = resolvedType.declaration.properties?.[propertyComponent];
+    const property = resolvedType.declaration.properties?.[propertyComponents[0] ?? ""];
     if (property == null) {
         return false;
     }
@@ -193,6 +188,19 @@ function resolvedTypeHasProperty(
         file
     });
     return resolvedTypeHasProperty(typeResolver, file, resolvedTypeProperty, propertyComponents.slice(1));
+}
+
+function maybeNamedType(resolvedType: ResolvedType | undefined): ResolvedType | undefined {
+    if (resolvedType == null) {
+        return undefined;
+    }
+    if (resolvedType._type === "named") {
+        return resolvedType;
+    }
+    if (resolvedType._type === "container" && resolvedType.container._type === "optional") {
+        return maybeNamedType(resolvedType.container.itemType);
+    }
+    return undefined;
 }
 
 function getRequestPropertyComponents(value: string): string[] | undefined {
@@ -206,6 +214,7 @@ function getResponsePropertyComponents(value: string): string[] | undefined {
 }
 
 function trimPrefix(value: string, prefix: string): string | null {
+    console.log(`Starts with:: value: ${value}, prefix: ${prefix}, startsWith: ${value.startsWith(prefix)}`);
     if (value.startsWith(prefix)) {
         return value.substring(prefix.length);
     }
