@@ -41,9 +41,15 @@ export interface RuleRunnerArgs<FileSchema> {
     relativeFilepath: RelativeFilePath;
     contents: FileSchema;
 }
+
 export interface RuleViolation {
     severity: "warning" | "error";
     message: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+export function isRuleViolaton(obj: any): obj is RuleViolation {
+    return obj != null && (obj.severity === "warning" || obj.severity === "error") && typeof obj.message === "string";
 }
 
 export type MaybePromise<T> = T | Promise<T>;

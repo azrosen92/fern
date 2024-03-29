@@ -12,6 +12,9 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
+const CURSOR_PROPERTY_ID = REQUEST_PREFIX + "cursor";
+const NEXT_CURSOR_PROPERTY_ID = RESPONSE_PREFIX + "next";
+const RESULTS_PROPERTY_ID = RESPONSE_PREFIX + "results";
 
 export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
@@ -19,11 +22,11 @@ export const ValidPaginationRule: Rule = {
         const typeResolver = new TypeResolverImpl(workspace);
         const defaultPagination = workspace.definition.rootApiFile.contents.pagination;
 
-        // TODO: We also need to verify that the cursor, page, and offset properties are primitives.
         // TODO: Split this out into separate functions, one for each pagination property.
         return {
             definitionFile: {
                 httpEndpoint: ({ endpointId, endpoint }, { relativeFilepath, contents: definitionFile }) => {
+                    // TODO: Remove this.
                     const violations: RuleViolation[] = [];
 
                     const endpointPagination =
@@ -38,6 +41,25 @@ export const ValidPaginationRule: Rule = {
                         casingsGenerator: CASINGS_GENERATOR,
                         rootApiFile: workspace.definition.rootApiFile.contents
                     });
+
+                    switch (endpointPagination.type) {
+                        case "cursor": {
+                            return validateCursorPagination({
+                                endpointId,
+                                typeResolver,
+                                file,
+                                cursorPagination: endpointPagination
+                            });
+                        }
+                        case "offset": {
+                            return validateOffsetPagination({
+                                endpointId,
+                                typeResolver,
+                                file,
+                                offsetPagination: endpointPagination
+                            });
+                        }
+                    }
 
                     const pagePropertyComponents = getRequestPropertyComponents(endpointPagination.page);
                     if (pagePropertyComponents == null) {
@@ -179,6 +201,34 @@ export const ValidPaginationRule: Rule = {
         };
     }
 };
+
+function validateCursorPagination({
+    endpointId,
+    typeResolver,
+    file,
+    cursorPagination
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    cursorPagination: RawSchemas.CursorPaginationSchema;
+}): RuleViolation[] {
+    return [];
+}
+
+function validateOffsetPagination({
+    endpointId,
+    typeResolver,
+    file,
+    offsetPagination
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    offsetPagination: RawSchemas.OffsetPaginationSchema;
+}): RuleViolation[] {
+    return [];
+}
 
 function isValidResponseProperty({
     typeResolver,
