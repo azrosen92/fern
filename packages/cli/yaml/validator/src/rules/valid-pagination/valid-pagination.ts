@@ -22,17 +22,13 @@ export const ValidPaginationRule: Rule = {
         const typeResolver = new TypeResolverImpl(workspace);
         const defaultPagination = workspace.definition.rootApiFile.contents.pagination;
 
-        // TODO: Split this out into separate functions, one for each pagination property.
         return {
             definitionFile: {
                 httpEndpoint: ({ endpointId, endpoint }, { relativeFilepath, contents: definitionFile }) => {
-                    // TODO: Remove this.
-                    const violations: RuleViolation[] = [];
-
                     const endpointPagination =
                         typeof endpoint.pagination === "boolean" ? defaultPagination : endpoint.pagination;
                     if (!endpointPagination) {
-                        return violations;
+                        return [];
                     }
 
                     const file = constructFernFileContext({
@@ -46,6 +42,7 @@ export const ValidPaginationRule: Rule = {
                         case "cursor": {
                             return validateCursorPagination({
                                 endpointId,
+                                endpoint,
                                 typeResolver,
                                 file,
                                 cursorPagination: endpointPagination
@@ -91,76 +88,15 @@ function validateCursorPagination({
         })
     );
 
-    const nextPropertyComponents = getResponsePropertyComponents(cursorPagination.next);
-    if (nextPropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
-        });
-    }
-    const resultsPropertyComponents = getResponsePropertyComponents(cursorPagination.results);
-    if (resultsPropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
-        });
-    }
-
-    const responseType = typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
-    if (responseType == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} is only compatible with endpoints that define a response.`
-        });
-        return violations;
-    }
-
-    if (pagePropertyComponents == null || nextPropertyComponents == null || resultsPropertyComponents == null) {
-        return violations;
-    }
-
-    const resolvedResponseType = typeResolver.resolveType({
-        type: responseType,
-        file
-    });
-
-    if (
-        !isValidCursorProperty({
+    violations.push(
+        ...validateCursorResponseProperties({
+            endpointId,
+            endpoint,
             typeResolver,
             file,
-            resolvedType: resolvedResponseType,
-            propertyComponents: nextPropertyComponents
+            cursorPagination
         })
-    ) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies next ${
-                cursorPagination.next
-            }, which is not specified as a response property.`
-        });
-    }
-
-    if (
-        !isValidResponseProperty({
-            typeResolver,
-            file,
-            resolvedType: resolvedResponseType,
-            propertyComponents: resultsPropertyComponents
-        })
-    ) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies results ${
-                cursorPagination.results
-            }, which is not specified as a response property.`
-        });
-    }
+    );
 
     return violations;
 }
@@ -201,7 +137,7 @@ function validatePageProperty({
     if (pagePropertyComponents == null) {
         return violations;
     }
-    // TODO: Can we clean this up?
+    // TODO: Clean this up - we should be able to just retreive the query parameter from the map and check it directly.
     for (const [queryParameterKey, queryParameter] of Object.entries(queryParameters)) {
         if (queryParameterKey !== pagePropertyComponents[0]) {
             continue;
@@ -221,13 +157,103 @@ function validatePageProperty({
         ) {
             violations.push({
                 severity: "error",
-                message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies page ${
+                message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
                     cursorPagination.page
                 }, which is not specified as a query-parameter.`
             });
         }
         break;
     }
+    return violations;
+}
+
+function validateCursorResponseProperties({
+    endpointId,
+    endpoint,
+    typeResolver,
+    file,
+    cursorPagination
+}: {
+    endpointId: string;
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    cursorPagination: RawSchemas.CursorPaginationSchema;
+}): RuleViolation[] {
+    const violations: RuleViolation[] = [];
+
+    const nextPropertyComponents = getResponsePropertyComponents(cursorPagination.next);
+    if (nextPropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
+        });
+    }
+
+    const resultsPropertyComponents = getResponsePropertyComponents(cursorPagination.results);
+    if (resultsPropertyComponents == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
+        });
+    }
+
+    const responseType = typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response;
+    if (responseType == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} is only compatible with endpoints that define a response.`
+        });
+        return violations;
+    }
+
+    if (nextPropertyComponents == null || resultsPropertyComponents == null) {
+        return violations;
+    }
+
+    const resolvedResponseType = typeResolver.resolveType({
+        type: responseType,
+        file
+    });
+
+    if (
+        !isValidCursorProperty({
+            typeResolver,
+            file,
+            resolvedType: resolvedResponseType,
+            propertyComponents: nextPropertyComponents
+        })
+    ) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'next' ${
+                cursorPagination.next
+            }, which is not specified as a response property.`
+        });
+    }
+
+    if (
+        !isValidResponseProperty({
+            typeResolver,
+            file,
+            resolvedType: resolvedResponseType,
+            propertyComponents: resultsPropertyComponents
+        })
+    ) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'results' ${
+                cursorPagination.results
+            }, which is not specified as a response property.`
+        });
+    }
+
     return violations;
 }
 
