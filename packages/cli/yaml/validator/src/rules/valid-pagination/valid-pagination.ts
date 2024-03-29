@@ -13,7 +13,7 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
 
-export const ValidPagination: Rule = {
+export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
     create: ({ workspace }) => {
         const typeResolver = new TypeResolverImpl(workspace);

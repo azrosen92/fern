@@ -1,1 +1,1 @@
-export { ValidPagination } from "./valid-pagination";
+export { ValidPaginationRule } from "./valid-pagination";
