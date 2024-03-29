@@ -1,0 +1,50 @@
+types: 
+  ListUsersResponse: 
+    properties: 
+      page: optional<Page>
+      total_count: 
+        type: integer
+        docs: The totall number of /users
+      data: list<User>
+
+  Page: 
+    properties: 
+      page: 
+        type: integer
+        docs: The current page
+      next: optional<NextPage>
+      per_page: integer
+      total_page: integer
+
+  NextPage: 
+    properties: 
+      page: integer
+      starting_after: string
+
+  User: 
+    properties: 
+      name: string
+      id: integer
+
+service:
+  auth: false
+  base-path: /users
+  endpoints:
+    listWithInvalidCursorPagination:
+      # TODO: Update this with the new pagination syntax.
+      pagination: 
+        type: cursor
+        page: $request.typo
+        next: $response.typo.next.starting_after
+        results: $response.typo
+      method: GET
+      path: ""
+      request: 
+        name: ListUsersRequest
+        query-parameters: 
+          starting_after: 
+            type: optional<string>
+            docs: | 
+              The cursor used for pagination in order to fetch 
+              the next page of results.
+      response: ListUsersRequest
