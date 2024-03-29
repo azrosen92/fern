@@ -115,6 +115,7 @@ function validatePageProperty({
     cursorPagination: RawSchemas.CursorPaginationSchema;
 }): RuleViolation[] {
     const violations: RuleViolation[] = [];
+
     const pagePropertyComponents = getRequestPropertyComponents(cursorPagination.page);
     if (pagePropertyComponents == null) {
         violations.push({
@@ -123,7 +124,20 @@ function validatePageProperty({
                 endpointId
             )} must define a dot-delimited 'page' property starting with $request (e.g $request.cursor).`
         });
+        return violations;
     }
+
+    const queryPropertyName = pagePropertyComponents?.[0];
+    if (queryPropertyName == null || pagePropertyComponents.length !== 1) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(
+                endpointId
+            )} is only compatible with 'page' properties that are defined as query parameters (e.g $request.cursor).`
+        });
+        return violations;
+    }
+
     const queryParameters = typeof endpoint.request !== "string" ? endpoint.request?.["query-parameters"] : null;
     if (queryParameters == null) {
         violations.push({
@@ -134,36 +148,39 @@ function validatePageProperty({
         });
         return violations;
     }
-    if (pagePropertyComponents == null) {
+
+    const queryParameter = queryParameters[queryPropertyName];
+    if (queryParameter == null) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
+                cursorPagination.page
+            }, but that query parameter does not exist.`
+        });
         return violations;
     }
-    // TODO: Clean this up - we should be able to just retreive the query parameter from the map and check it directly.
-    for (const [queryParameterKey, queryParameter] of Object.entries(queryParameters)) {
-        if (queryParameterKey !== pagePropertyComponents[0]) {
-            continue;
-        }
-        const queryParameterType = typeof queryParameter !== "string" ? queryParameter.type : queryParameter;
-        const resolvedQueryParameterType = typeResolver.resolveType({
-            type: queryParameterType,
-            file
+
+    const queryParameterType = typeof queryParameter !== "string" ? queryParameter.type : queryParameter;
+    const resolvedQueryParameterType = typeResolver.resolveType({
+        type: queryParameterType,
+        file
+    });
+    if (
+        !isValidCursorProperty({
+            typeResolver,
+            file,
+            resolvedType: resolvedQueryParameterType,
+            propertyComponents: pagePropertyComponents.slice(1)
+        })
+    ) {
+        violations.push({
+            severity: "error",
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
+                cursorPagination.page
+            }, which is not a valid page type.`
         });
-        if (
-            !isValidCursorProperty({
-                typeResolver,
-                file,
-                resolvedType: resolvedQueryParameterType,
-                propertyComponents: pagePropertyComponents.slice(1)
-            })
-        ) {
-            violations.push({
-                severity: "error",
-                message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies 'page' ${
-                    cursorPagination.page
-                }, which is not specified as a query-parameter.`
-            });
-        }
-        break;
     }
+
     return violations;
 }
 

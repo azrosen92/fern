@@ -28,6 +28,13 @@ describe("valid-pagination", () => {
         const expectedViolations: ValidationViolation[] = [
             {
                 message:
+                    "Pagination configuration for endpoint listWithInvalidCursorPagination specifies 'page' $request.typo, but that query parameter does not exist.",
+                nodePath: ["service", "endpoints", "listWithInvalidCursorPagination"],
+                relativeFilepath: RelativeFilePath.of("simple.yml"),
+                severity: "error"
+            },
+            {
+                message:
                     "Pagination configuration for endpoint listWithInvalidCursorPagination specifies 'next' $response.typo.next.starting_after, which is not specified as a response property.",
                 nodePath: ["service", "endpoints", "listWithInvalidCursorPagination"],
                 relativeFilepath: RelativeFilePath.of("simple.yml"),
