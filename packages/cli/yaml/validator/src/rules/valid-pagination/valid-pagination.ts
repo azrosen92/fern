@@ -12,6 +12,8 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
+const NEXT_ID = "next";
+const RESULTS_ID = "results";
 
 export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
@@ -213,36 +215,14 @@ function validateNextProperty({
     resolvedResponseType: ResolvedType;
     nextProperty: string;
 }): RuleViolation[] {
-    const violations: RuleViolation[] = [];
-
-    const nextPropertyComponents = getResponsePropertyComponents(nextProperty);
-    if (nextPropertyComponents == null) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} must define a dot-delimited 'next' property starting with $response (e.g $response.next).`
-        });
-    }
-
-    if (
-        nextPropertyComponents != null &&
-        !isValidCursorProperty({
-            typeResolver,
-            file,
-            resolvedType: resolvedResponseType,
-            propertyComponents: nextPropertyComponents
-        })
-    ) {
-        violations.push({
-            severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} specifies 'next' ${nextProperty}, which is not specified as a response property.`
-        });
-    }
-
-    return violations;
+    return validateResponseProperty({
+        endpointId,
+        typeResolver,
+        file,
+        resolvedResponseType,
+        responseProperty: nextProperty,
+        responsePropertyID: NEXT_ID
+    });
 }
 
 function validateResultsProperty({
@@ -258,32 +238,57 @@ function validateResultsProperty({
     resolvedResponseType: ResolvedType;
     resultsProperty: string;
 }): RuleViolation[] {
+    return validateResponseProperty({
+        endpointId,
+        typeResolver,
+        file,
+        resolvedResponseType,
+        responseProperty: resultsProperty,
+        responsePropertyID: RESULTS_ID
+    });
+}
+
+function validateResponseProperty({
+    endpointId,
+    typeResolver,
+    file,
+    resolvedResponseType,
+    responseProperty,
+    responsePropertyID
+}: {
+    endpointId: string;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedResponseType: ResolvedType;
+    responseProperty: string;
+    responsePropertyID: string;
+}): RuleViolation[] {
     const violations: RuleViolation[] = [];
 
-    const resultsPropertyComponents = getResponsePropertyComponents(resultsProperty);
-    if (resultsPropertyComponents == null) {
+    const responsePropertyComponents = getResponsePropertyComponents(responseProperty);
+    if (responsePropertyComponents == null) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} must define a dot-delimited 'results' property starting with $response (e.g $response.results).`
+            )} must define a dot-delimited '${responsePropertyID}' property starting with $response (e.g $response.${responsePropertyID}).`
         });
     }
 
     if (
-        resultsPropertyComponents != null &&
+        responsePropertyComponents != null &&
         !isValidResponseProperty({
             typeResolver,
             file,
             resolvedType: resolvedResponseType,
-            propertyComponents: resultsPropertyComponents
+            propertyComponents: responsePropertyComponents
         })
     ) {
         violations.push({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(
                 endpointId
-            )} specifies 'results' ${resultsProperty}, which is not specified as a response property.`
+            )} specifies '${responsePropertyID}' ${responseProperty}, which is not specified as a response property.`
         });
     }
 
