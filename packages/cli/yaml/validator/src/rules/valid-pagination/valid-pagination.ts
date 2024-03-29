@@ -216,7 +216,6 @@ function getResponsePropertyComponents(value: string): string[] | undefined {
 }
 
 function trimPrefix(value: string, prefix: string): string | null {
-    console.log(`Starts with:: value: ${value}, prefix: ${prefix}, startsWith: ${value.startsWith(prefix)}`);
     if (value.startsWith(prefix)) {
         return value.substring(prefix.length);
     }
