@@ -272,7 +272,7 @@ function validateResultsProperty({
 
     if (
         resultsPropertyComponents != null &&
-        !isValidResponseProperty({
+        !isValidResultsProperty({
             typeResolver,
             file,
             resolvedType: resolvedResponseType,
@@ -305,7 +305,7 @@ function validateOffsetPagination({
     return [];
 }
 
-function isValidResponseProperty({
+function isValidResultsProperty({
     typeResolver,
     file,
     resolvedType,
