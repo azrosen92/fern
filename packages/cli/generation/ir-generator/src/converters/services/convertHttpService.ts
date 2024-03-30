@@ -7,6 +7,7 @@ import {
     Pagination,
     PathParameter,
     PathParameterLocation,
+    QueryParameter,
     ResponseErrors,
     TypeReference
 } from "@fern-api/ir-sdk";
@@ -56,8 +57,7 @@ export async function convertHttpService({
     });
 
     const serviceName = { fernFilepath: file.fernFilepath };
-    const defaultPagination = file.rootApiFile.pagination;
-    return {
+    const service: HttpService = {
         availability: convertAvailability(serviceDefinition.availability),
         name: serviceName,
         displayName: serviceDefinition["display-name"] ?? undefined,
@@ -101,21 +101,11 @@ export async function convertHttpService({
                             ? await Promise.all(
                                   Object.entries(endpoint.request["query-parameters"]).map(
                                       async ([queryParameterKey, queryParameter]) => {
-                                          const { name } = getQueryParameterName({ queryParameterKey, queryParameter });
-                                          const valueType = file.parseTypeReference(queryParameter);
-                                          return {
-                                              ...(await convertDeclaration(queryParameter)),
-                                              name: file.casingsGenerator.generateNameAndWireValue({
-                                                  wireValue: queryParameterKey,
-                                                  name
-                                              }),
-                                              valueType,
-                                              allowMultiple:
-                                                  typeof queryParameter !== "string" &&
-                                                  queryParameter["allow-multiple"] != null
-                                                      ? queryParameter["allow-multiple"]
-                                                      : false
-                                          };
+                                          return await convertQueryParameter({
+                                              file,
+                                              queryParameterKey,
+                                              queryParameter
+                                          });
                                       }
                                   )
                               )
@@ -153,7 +143,6 @@ export async function convertHttpService({
                                   })
                               )
                             : [],
-                    // TODO: Implement pagination here.
                     pagination: undefined
                 };
                 httpEndpoint.id = IdGenerator.generateEndpointId(serviceName, httpEndpoint);
@@ -161,9 +150,35 @@ export async function convertHttpService({
             })
         )
     };
+    service.pagination = service.endpoints.some((endpoint) => endpoint.pagination != null);
 }
 
-function convertPagination({
+async function convertQueryParameter({
+    file,
+    queryParameterKey,
+    queryParameter
+}: {
+    file: FernFileContext;
+    queryParameterKey: string;
+    queryParameter: RawSchemas.HttpQueryParameterSchema;
+}): Promise<QueryParameter> {
+    const { name } = getQueryParameterName({ queryParameterKey, queryParameter });
+    const valueType = file.parseTypeReference(queryParameter);
+    return {
+        ...(await convertDeclaration(queryParameter)),
+        name: file.casingsGenerator.generateNameAndWireValue({
+            wireValue: queryParameterKey,
+            name
+        }),
+        valueType,
+        allowMultiple:
+            typeof queryParameter !== "string" && queryParameter["allow-multiple"] != null
+                ? queryParameter["allow-multiple"]
+                : false
+    };
+}
+
+async function convertPagination({
     file,
     endpoint
 }: {
@@ -177,16 +192,9 @@ function convertPagination({
     }
     switch (endpointPagination.type) {
         case "cursor":
-            return Pagination.cursor({
-                page: endpointPagination.page,
-                next: endpointPagination.next,
-                results: endpointPagination.results
-            });
+            return Pagination.cursor({});
         case "offset":
-            return Pagination.offset({
-                page: endpointPagination.page,
-                results: endpointPagination.results
-            });
+            return Pagination.offset({});
         default:
             assertNever(endpointPagination);
     }
