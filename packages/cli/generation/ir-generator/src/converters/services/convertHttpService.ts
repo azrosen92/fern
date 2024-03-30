@@ -4,6 +4,7 @@ import {
     HttpHeader,
     HttpMethod,
     HttpService,
+    Pagination,
     PathParameter,
     PathParameterLocation,
     ResponseErrors,
@@ -55,6 +56,7 @@ export async function convertHttpService({
     });
 
     const serviceName = { fernFilepath: file.fernFilepath };
+    const defaultPagination = file.rootApiFile.pagination;
     return {
         availability: convertAvailability(serviceDefinition.availability),
         name: serviceName,
@@ -159,6 +161,35 @@ export async function convertHttpService({
             })
         )
     };
+}
+
+function convertPagination({
+    file,
+    endpoint
+}: {
+    file: FernFileContext;
+    endpoint: RawSchemas.HttpEndpointSchema;
+}): Pagination | undefined {
+    const endpointPagination =
+        typeof endpoint.pagination === "boolean" ? file.rootApiFile.pagination : endpoint.pagination;
+    if (!endpointPagination) {
+        return undefined;
+    }
+    switch (endpointPagination.type) {
+        case "cursor":
+            return Pagination.cursor({
+                page: endpointPagination.page,
+                next: endpointPagination.next,
+                results: endpointPagination.results
+            });
+        case "offset":
+            return Pagination.offset({
+                page: endpointPagination.page,
+                results: endpointPagination.results
+            });
+        default:
+            assertNever(endpointPagination);
+    }
 }
 
 export async function convertPathParameters({
