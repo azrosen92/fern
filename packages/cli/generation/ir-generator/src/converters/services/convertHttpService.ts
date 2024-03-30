@@ -216,24 +216,17 @@ async function convertPagination({
     }
     switch (endpointPagination.type) {
         case "cursor":
-            // Iterate over each query parameter
-            for (const queryParameter of endpoint.queryParameters) {
-                // Check if the query parameter matches the 'page' property
-                if (queryParameter.name.name.originalName === endpointPagination.page) {
-                    // Return the query parameter
-                    return queryParameter;
-                }
-            }
-            break;
+            return Pagination.cursor({
+                page: endpoint.queryParameters.find(
+                    (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+                )
+            });
         case "offset":
-            // Iterate over each query parameter
-            for (const queryParameter of endpoint.queryParameters) {
-                if (queryParameter.name.name.originalName === endpointPagination.page) {
-                    // Return the query parameter
-                    return queryParameter;
-                }
-            }
-            break;
+            return Pagination.offset({
+                page: endpoint.queryParameters.find(
+                    (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+                )
+            });
         default:
             assertNever(endpointPagination);
     }
