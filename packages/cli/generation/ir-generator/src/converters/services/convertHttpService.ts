@@ -13,6 +13,7 @@ import {
 } from "@fern-api/ir-sdk";
 import { FernWorkspace } from "@fern-api/workspace-loader";
 import { isVariablePathParameter, RawSchemas } from "@fern-api/yaml-schema";
+import { PaginationSchema } from "@fern-api/yaml-schema/src/schemas";
 import urlJoin from "url-join";
 import { FernFileContext } from "../../FernFileContext";
 import { IdGenerator } from "../../IdGenerator";
@@ -27,6 +28,9 @@ import { convertHttpRequestBody } from "./convertHttpRequestBody";
 import { convertHttpResponse } from "./convertHttpResponse";
 import { convertHttpSdkRequest } from "./convertHttpSdkRequest";
 import { convertResponseErrors } from "./convertResponseErrors";
+
+const REQUEST_PREFIX = "$request.";
+const RESPONSE_PREFIX = "$response.";
 
 export async function convertHttpService({
     rootPathParameters,
@@ -153,6 +157,7 @@ export async function convertHttpService({
     for (const endpoint of service.endpoints) {
         endpoint.pagination = convertPagination({ file, endpoint });
     }
+    return service;
 }
 
 async function convertQueryParameter({
@@ -180,6 +185,7 @@ async function convertQueryParameter({
     };
 }
 
+// TODO: Trim the $request and $resposne prefix from the schemas.
 async function convertPagination({
     file,
     endpoint
@@ -193,40 +199,28 @@ async function convertPagination({
         return undefined;
     }
     switch (endpointPagination.type) {
-        case "cursor":
-            return Pagination.cursor({});
-        case "offset":
-            return Pagination.offset({});
-        default:
-            assertNever(endpointPagination);
-    }
-}
-
-async function convertPagination({
-    file,
-    endpoint
-}: {
-    file: FernFileContext;
-    endpoint: HttpEndpoint;
-}): Pagination | undefined {
-    const endpointPagination =
-        typeof endpoint.pagination === "boolean" ? file.rootApiFile.pagination : endpoint.pagination;
-    if (!endpointPagination) {
-        return undefined;
-    }
-    switch (endpointPagination.type) {
-        case "cursor":
+        case "cursor": {
+            const queryParameter = endpoint.queryParameters.find(
+                (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+            );
+            if (queryParameter == null) {
+                return undefined;
+            }
             return Pagination.cursor({
-                page: endpoint.queryParameters.find(
-                    (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
-                )
+                page: queryParameter
             });
-        case "offset":
+        }
+        case "offset": {
+            const queryParameter = endpoint.queryParameters.find(
+                (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+            );
+            if (queryParameter == null) {
+                return undefined;
+            }
             return Pagination.offset({
-                page: endpoint.queryParameters.find(
-                    (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
-                )
+                page: queryParameter
             });
+        }
         default:
             assertNever(endpointPagination);
     }
@@ -423,4 +417,45 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
         name: headerKey,
         wasExplicitlySet: false
     };
+}
+
+interface PagePropertyComponents {
+    page: string[];
+    next?: string[];
+    results: string[];
+}
+
+function getPagePropertyComponents(endpointPagination: PaginationSchema): PagePropertyComponents {
+    switch (endpointPagination.type) {
+        case "cursor":
+            return {
+                page: endpointPagination.page.substring("$request.".length)?.split(".") ?? [],
+                next: endpointPagination.next.substring("$response.".length)?.split(".") ?? [],
+                results: endpointPagination.results.substring("$response.".length)?.split(".") ?? []
+            };
+        case "offset":
+            return {
+                page: endpointPagination.page.substring("$request.".length)?.split(".") ?? [],
+                results: endpointPagination.results.substring("$response.".length)?.split(".") ?? []
+            };
+        default:
+            assertNever(endpointPagination);
+    }
+}
+
+function getRequestPropertyComponents(value: string): string[] | undefined {
+    const trimmed = trimPrefix(value, REQUEST_PREFIX);
+    return trimmed?.split(".");
+}
+
+function getResponsePropertyComponents(value: string): string[] | undefined {
+    const trimmed = trimPrefix(value, RESPONSE_PREFIX);
+    return trimmed?.split(".");
+}
+
+function trimPrefix(value: string, prefix: string): string | null {
+    if (value.startsWith(prefix)) {
+        return value.substring(prefix.length);
+    }
+    return null;
 }
