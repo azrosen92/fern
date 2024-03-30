@@ -150,7 +150,9 @@ export async function convertHttpService({
             })
         )
     };
-    service.pagination = service.endpoints.some((endpoint) => endpoint.pagination != null);
+    for (const endpoint of service.endpoints) {
+        endpoint.pagination = convertPagination({ file, endpoint });
+    }
 }
 
 async function convertQueryParameter({
@@ -183,7 +185,7 @@ async function convertPagination({
     endpoint
 }: {
     file: FernFileContext;
-    endpoint: RawSchemas.HttpEndpointSchema;
+    endpoint: HttpEndpoint;
 }): Pagination | undefined {
     const endpointPagination =
         typeof endpoint.pagination === "boolean" ? file.rootApiFile.pagination : endpoint.pagination;
@@ -195,6 +197,43 @@ async function convertPagination({
             return Pagination.cursor({});
         case "offset":
             return Pagination.offset({});
+        default:
+            assertNever(endpointPagination);
+    }
+}
+
+async function convertPagination({
+    file,
+    endpoint
+}: {
+    file: FernFileContext;
+    endpoint: HttpEndpoint;
+}): Pagination | undefined {
+    const endpointPagination =
+        typeof endpoint.pagination === "boolean" ? file.rootApiFile.pagination : endpoint.pagination;
+    if (!endpointPagination) {
+        return undefined;
+    }
+    switch (endpointPagination.type) {
+        case "cursor":
+            // Iterate over each query parameter
+            for (const queryParameter of endpoint.queryParameters) {
+                // Check if the query parameter matches the 'page' property
+                if (queryParameter.name.name.originalName === endpointPagination.page) {
+                    // Return the query parameter
+                    return queryParameter;
+                }
+            }
+            break;
+        case "offset":
+            // Iterate over each query parameter
+            for (const queryParameter of endpoint.queryParameters) {
+                if (queryParameter.name.name.originalName === endpointPagination.page) {
+                    // Return the query parameter
+                    return queryParameter;
+                }
+            }
+            break;
         default:
             assertNever(endpointPagination);
     }
