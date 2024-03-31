@@ -6,7 +6,7 @@ types:
 
   ListUsersPaginationResponse: 
     properties: 
-      pages: optional<Page>
+      page: optional<Page>
       total_count: 
         type: integer
         docs: The totall number of /users
@@ -62,7 +62,7 @@ service:
 
     listWithOffsetPagination:
       pagination: 
-        offset: $request.starting_after
+        offset: $request.page
         results: $response.data
       method: GET
       path: ""
