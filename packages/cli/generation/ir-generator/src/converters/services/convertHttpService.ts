@@ -532,6 +532,9 @@ async function getNestedObjectPropertyFromResolvedType({
     resolvedType: ResolvedType;
     propertyComponents: string[];
 }): Promise<ObjectProperty | undefined> {
+    if (propertyComponents.length === 0) {
+        return undefined;
+    }
     if (propertyComponents.length === 1) {
         return await getObjectPropertyFromResolvedType({
             typeResolver,
@@ -544,12 +547,14 @@ async function getNestedObjectPropertyFromResolvedType({
     if (objectSchema == null) {
         return undefined;
     }
-    const property = objectSchema.properties?.[propertyComponents[0] ?? ""];
-    if (property == null) {
-        return undefined;
-    }
+    const propertyType = await getPropertyTypeFromObjectSchema({
+        typeResolver,
+        file,
+        objectSchema,
+        property: propertyComponents[0] ?? ""
+    });
     const resolvedTypeProperty = typeResolver.resolveTypeOrThrow({
-        type: typeof property === "string" ? property : property.type,
+        type: propertyType,
         file
     });
     return getNestedObjectPropertyFromResolvedType({
@@ -560,7 +565,7 @@ async function getNestedObjectPropertyFromResolvedType({
     });
 }
 
-async function getPropertiesFromObjectSchema({
+async function getPropertyTypeFromObjectSchema({
     typeResolver,
     file,
     objectSchema,
