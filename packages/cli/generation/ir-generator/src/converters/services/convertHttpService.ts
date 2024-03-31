@@ -4,8 +4,8 @@ import {
     HttpHeader,
     HttpMethod,
     HttpService,
+    ObjectProperty,
     Pagination,
-    PaginationProperty,
     PathParameter,
     PathParameterLocation,
     QueryParameter,
@@ -19,13 +19,14 @@ import { FernFileContext } from "../../FernFileContext";
 import { IdGenerator } from "../../IdGenerator";
 import { ErrorResolver } from "../../resolvers/ErrorResolver";
 import { ExampleResolver } from "../../resolvers/ExampleResolver";
+import { ResolvedType } from "../../resolvers/ResolvedType";
 import { TypeResolver } from "../../resolvers/TypeResolver";
 import { VariableResolver } from "../../resolvers/VariableResolver";
 import { convertAvailability, convertDeclaration } from "../convertDeclaration";
 import { constructHttpPath } from "./constructHttpPath";
 import { convertExampleEndpointCall } from "./convertExampleEndpointCall";
 import { convertHttpRequestBody } from "./convertHttpRequestBody";
-import { convertHttpResponse, getObjectPropertyFromResolvedType } from "./convertHttpResponse";
+import { convertHttpResponse, getObjectPropertyFromResolvedType, isRawObjectDefinition } from "./convertHttpResponse";
 import { convertHttpSdkRequest } from "./convertHttpSdkRequest";
 import { convertResponseErrors } from "./convertResponseErrors";
 
@@ -147,7 +148,7 @@ export async function convertHttpService({
                     pagination: undefined
                 };
                 httpEndpoint.id = IdGenerator.generateEndpointId(serviceName, httpEndpoint);
-                httpEndpoint.pagination = convertPagination({
+                httpEndpoint.pagination = await convertPagination({
                     typeResolver,
                     file,
                     endpointSchema: endpoint,
@@ -195,7 +196,7 @@ async function convertPagination({
     file: FernFileContext;
     endpointSchema: RawSchemas.HttpEndpointSchema;
     endpoint: HttpEndpoint;
-}): Pagination | undefined {
+}): Promise<Pagination | undefined> {
     const endpointPagination =
         typeof endpointSchema.pagination === "boolean" ? file.rootApiFile.pagination : endpointSchema.pagination;
     if (!endpointPagination) {
@@ -210,33 +211,41 @@ async function convertPagination({
             if (queryParameter == null || endpointSchema.response == null) {
                 return undefined;
             }
-            const resolvedResponseType = typeResolver.resolveTypeOrThrow({
-                type:
-                    typeof endpointSchema.response === "string"
-                        ? endpointSchema.response
-                        : endpointSchema.response.type,
-                file
+            const resolvedResponseType = resolveResponseType({
+                typeResolver,
+                file,
+                endpoint: endpointSchema
             });
-            const nextCursorObjectProperty = await getObjectPropertyFromResolvedType(
-                resolvedResponseType,
-                pagePropertyComponents.next[0] ?? "", // TODO: Fix this.
+            const nextCursorObjectProperty = await getNestedObjectPropertyFromResolvedType({
+                typeResolver,
                 file,
-                typeResolver
-            );
-            const resultsObjectProperty = await getObjectPropertyFromResolvedType(
-                resolvedResponseType,
-                pagePropertyComponents.results[0] ?? "", // TODO: Fix this.
+                resolvedType: resolvedResponseType,
+                propertyComponents: pagePropertyComponents.next
+            });
+            if (nextCursorObjectProperty == null) {
+                return undefined;
+            }
+            const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
+                typeResolver,
                 file,
-                typeResolver
-            );
+                resolvedType: resolvedResponseType,
+                propertyComponents: pagePropertyComponents.results
+            });
+            if (resultsObjectProperty == null) {
+                return undefined;
+            }
             return Pagination.cursor({
                 page: queryParameter,
                 next: {
-                    propertyPath: undefined, // TODO: Fix this.
+                    propertyPath: pagePropertyComponents.next.map((property) =>
+                        file.casingsGenerator.generateName(property)
+                    ),
                     property: nextCursorObjectProperty
                 },
                 results: {
-                    propertyPath: undefined, // TODO: Fix this.
+                    propertyPath: pagePropertyComponents.results.map((property) =>
+                        file.casingsGenerator.generateName(property)
+                    ),
                     property: resultsObjectProperty
                 }
             });
@@ -248,8 +257,28 @@ async function convertPagination({
             if (queryParameter == null) {
                 return undefined;
             }
+            const resolvedResponseType = resolveResponseType({
+                typeResolver,
+                file,
+                endpoint: endpointSchema
+            });
+            const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
+                typeResolver,
+                file,
+                resolvedType: resolvedResponseType,
+                propertyComponents: pagePropertyComponents.results
+            });
+            if (resultsObjectProperty == null) {
+                return undefined;
+            }
             return Pagination.offset({
-                page: queryParameter
+                page: queryParameter,
+                results: {
+                    propertyPath: pagePropertyComponents.results.map((property) =>
+                        file.casingsGenerator.generateName(property)
+                    ),
+                    property: resultsObjectProperty
+                }
             });
         }
         default:
@@ -450,40 +479,72 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
     };
 }
 
-function getPaginationPropertyFromResponse({
-    resv,
+async function getNestedObjectPropertyFromResolvedType({
+    typeResolver,
+    file,
+    resolvedType,
     propertyComponents
 }: {
-    responseSchema: RawSchemas.HttpResponseSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType;
     propertyComponents: string[];
-}): PaginationProperty | undefined {
-    if (response.type !== "json" || response.value.type !== "response") {
+}): Promise<ObjectProperty | undefined> {
+    if (propertyComponents.length === 1) {
+        return await getObjectPropertyFromResolvedType({
+            typeResolver,
+            file,
+            resolvedType,
+            property: propertyComponents[0] ?? ""
+        });
+    }
+    const objectSchema = maybeObjectSchema(resolvedType);
+    if (objectSchema == null) {
         return undefined;
     }
-    // TODO: Resolve the object associated with the response.
-    // TODO: Recursively visit each object property, until we reach the property that represents the pagination.
-    return undefined;
+    const property = objectSchema.properties?.[propertyComponents[0] ?? ""];
+    if (property == null) {
+        return undefined;
+    }
+    const resolvedTypeProperty = typeResolver.resolveTypeOrThrow({
+        type: typeof property === "string" ? property : property.type,
+        file
+    });
+    return getNestedObjectPropertyFromResolvedType({
+        typeResolver,
+        file,
+        resolvedType: resolvedTypeProperty,
+        propertyComponents: propertyComponents.slice(1)
+    });
 }
 
-// function getObjectPropertyFromObjectTypeDeclaration({
-//     objectTypeDeclaration,
-//     propertyComponents
-// }: {
-//     objectTypeDeclaration: ObjectTypeDeclaration;
-//     propertyComponents: string[];
-// }): ObjectProperty | undefined {
-//     const objectProperty = objectTypeDeclaration.properties.find(
-//         (property) => property.name.name.originalName === propertyComponents?.[0]
-//     );
-//     if (objectProperty == null) {
-//         return undefined;
-//     }
-//     if (propertyComponents.length === 1) {
-//         return objectProperty;
-//     }
-//     // TODO: Recursively visit the nested object.
-//     return undefined;
-// }
+function resolveResponseType({
+    endpoint,
+    typeResolver,
+    file
+}: {
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+}): ResolvedType {
+    return typeResolver.resolveTypeOrThrow({
+        type: (typeof endpoint.response !== "string" ? endpoint.response?.type : endpoint.response) ?? "",
+        file
+    });
+}
+
+function maybeObjectSchema(resolvedType: ResolvedType | undefined): RawSchemas.ObjectSchema | undefined {
+    if (resolvedType == null) {
+        return undefined;
+    }
+    if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
+        return resolvedType.declaration;
+    }
+    if (resolvedType._type === "container" && resolvedType.container._type === "optional") {
+        return maybeObjectSchema(resolvedType.container.itemType);
+    }
+    return undefined;
+}
 
 type PaginationPropertyComponents = CursorPaginationPropertyComponents | OffsetPaginationPropertyComponents;
 

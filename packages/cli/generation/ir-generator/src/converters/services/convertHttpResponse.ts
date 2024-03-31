@@ -74,12 +74,12 @@ async function convertJsonResponse(
             JsonResponse.nestedPropertyAsResponse({
                 docs,
                 responseBodyType,
-                responseProperty: await getObjectPropertyFromResolvedType(
-                    resolvedType,
-                    responseProperty,
+                responseProperty: await getObjectPropertyFromResolvedType({
+                    typeResolver,
                     file,
-                    typeResolver
-                )
+                    resolvedType,
+                    property: responseProperty
+                })
             })
         );
     }
@@ -91,31 +91,36 @@ async function convertJsonResponse(
     );
 }
 
-async function getObjectPropertyFromResolvedType(
-    resolvedType: ResolvedType,
-    property: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<ObjectProperty> {
+export async function getObjectPropertyFromResolvedType({
+    typeResolver,
+    file,
+    resolvedType,
+    property
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    resolvedType: ResolvedType;
+    property: string;
+}): Promise<ObjectProperty> {
     switch (resolvedType._type) {
         case "container":
             if (resolvedType.container._type === "optional") {
-                return await getObjectPropertyFromResolvedType(
-                    resolvedType.container.itemType,
-                    property,
+                return await getObjectPropertyFromResolvedType({
+                    typeResolver,
                     file,
-                    typeResolver
-                );
+                    resolvedType: resolvedType.container.itemType,
+                    property
+                });
             }
             break;
         case "named":
             if (isRawObjectDefinition(resolvedType.declaration)) {
-                return await getObjectPropertyFromObjectSchema(
-                    resolvedType.declaration,
-                    property,
-                    resolvedType.file,
-                    typeResolver
-                );
+                return await getObjectPropertyFromObjectSchema({
+                    typeResolver,
+                    file: resolvedType.file,
+                    objectSchema: resolvedType.declaration,
+                    property
+                });
             }
             break;
         case "primitive":
@@ -127,12 +132,17 @@ async function getObjectPropertyFromResolvedType(
     throw new Error("Internal error; response must be an object in order to return a property as a response");
 }
 
-async function getObjectPropertyFromObjectSchema(
-    objectSchema: RawSchemas.ObjectSchema,
-    property: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<ObjectProperty> {
+export async function getObjectPropertyFromObjectSchema({
+    typeResolver,
+    file,
+    objectSchema,
+    property
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    objectSchema: RawSchemas.ObjectSchema;
+    property: string;
+}): Promise<ObjectProperty> {
     const properties = await getAllPropertiesForRawObjectSchema(objectSchema, file, typeResolver);
     const objectProperty = properties[property];
     if (objectProperty == null) {
@@ -190,7 +200,7 @@ type NamedDeclaration =
     | RawSchemas.UndiscriminatedUnionSchema
     | RawSchemas.EnumSchema;
 
-function isRawObjectDefinition(namedDeclaration: NamedDeclaration): namedDeclaration is RawSchemas.ObjectSchema {
+export function isRawObjectDefinition(namedDeclaration: NamedDeclaration): namedDeclaration is RawSchemas.ObjectSchema {
     return (
         (namedDeclaration as RawSchemas.ObjectSchema).extends != null ||
         (namedDeclaration as RawSchemas.ObjectSchema).properties != null
