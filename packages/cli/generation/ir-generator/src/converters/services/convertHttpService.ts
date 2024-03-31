@@ -13,7 +13,6 @@ import {
 } from "@fern-api/ir-sdk";
 import { FernWorkspace } from "@fern-api/workspace-loader";
 import { isVariablePathParameter, RawSchemas } from "@fern-api/yaml-schema";
-import { PaginationSchema } from "@fern-api/yaml-schema/src/schemas";
 import urlJoin from "url-join";
 import { FernFileContext } from "../../FernFileContext";
 import { IdGenerator } from "../../IdGenerator";
@@ -28,9 +27,6 @@ import { convertHttpRequestBody } from "./convertHttpRequestBody";
 import { convertHttpResponse } from "./convertHttpResponse";
 import { convertHttpSdkRequest } from "./convertHttpSdkRequest";
 import { convertResponseErrors } from "./convertResponseErrors";
-
-const REQUEST_PREFIX = "$request.";
-const RESPONSE_PREFIX = "$response.";
 
 export async function convertHttpService({
     rootPathParameters,
@@ -150,14 +146,15 @@ export async function convertHttpService({
                     pagination: undefined
                 };
                 httpEndpoint.id = IdGenerator.generateEndpointId(serviceName, httpEndpoint);
+                httpEndpoint.pagination = convertPagination({
+                    file,
+                    endpointSchema: endpoint,
+                    endpoint: httpEndpoint
+                });
                 return httpEndpoint;
             })
         )
     };
-
-    for (const endpoint of service.endpoints) {
-        endpoint.pagination = convertPagination({ file, endpoint });
-    }
     return service;
 }
 
@@ -437,7 +434,9 @@ interface OffsetPaginationPropertyComponents {
     results: string[];
 }
 
-function getPaginationPropertyComponents(endpointPagination: PaginationSchema): PaginationPropertyComponents {
+function getPaginationPropertyComponents(
+    endpointPagination: RawSchemas.PaginationSchema
+): PaginationPropertyComponents {
     switch (endpointPagination.type) {
         case "cursor":
             return {
