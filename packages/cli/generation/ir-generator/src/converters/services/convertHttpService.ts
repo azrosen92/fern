@@ -3,8 +3,12 @@ import {
     HttpEndpoint,
     HttpHeader,
     HttpMethod,
+    HttpResponse,
     HttpService,
+    ObjectProperty,
+    ObjectTypeDeclaration,
     Pagination,
+    PaginationProperty,
     PathParameter,
     PathParameterLocation,
     QueryParameter,
@@ -198,21 +202,22 @@ async function convertPagination({
         return undefined;
     }
     const pagePropertyComponents = getPaginationPropertyComponents(endpointPagination);
-    switch (endpointPagination.type) {
+    switch (pagePropertyComponents.type) {
         case "cursor": {
             const queryParameter = endpoint.queryParameters.find(
-                (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+                (queryParameter) => queryParameter.name.name.originalName === pagePropertyComponents.cursor
             );
             if (queryParameter == null) {
                 return undefined;
             }
+            const nextCursorObjectProperty = undefined;
             return Pagination.cursor({
                 page: queryParameter
             });
         }
         case "offset": {
             const queryParameter = endpoint.queryParameters.find(
-                (queryParameter) => queryParameter.name.name.originalName === endpointPagination.page
+                (queryParameter) => queryParameter.name.name.originalName === pagePropertyComponents.offset
             );
             if (queryParameter == null) {
                 return undefined;
@@ -222,7 +227,7 @@ async function convertPagination({
             });
         }
         default:
-            assertNever(endpointPagination);
+            assertNever(pagePropertyComponents);
     }
 }
 
@@ -418,6 +423,79 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
         wasExplicitlySet: false
     };
 }
+
+function getPaginationPropertyFromResponse({
+    response,
+    propertyComponents
+}: {
+    response: HttpResponse;
+    propertyComponents: string[];
+}): PaginationProperty | undefined {
+    if (response.type !== "json" || response.value.type !== "response") {
+        return undefined;
+    }
+    // TODO: Resolve the object associated with the response.
+    // TODO: Recursively visit each object property, until we reach the property that represents the pagination.
+    return undefined;
+}
+
+function getObjectPropertyFromObjectTypeDeclaration({
+    objectTypeDeclaration,
+    propertyComponents,
+}: {
+    objectTypeDeclaration: ObjectTypeDeclaration;
+    propertyComponents: string[];
+}): ObjectProperty | undefined {
+    const objectProperty = objectTypeDeclaration.properties.find(
+        (property) => property.name.name.originalName === propertyComponents?.[0]
+    );
+    if (objectProperty == null) {
+        return undefined;
+    }
+    if (propertyComponents.length === 1) {
+        return objectProperty;
+    }
+    // TODO: Recursively visit the nested object.
+    return undefined;
+})
+
+// function getObjectPropertyFromResolvedType(
+//     resolvedType: ResolvedType,
+//     propertyComponents: string[],
+//     file: FernFileContext,
+//     typeResolver: TypeResolver
+// ): Promise<HttpResponse> {
+//     const responseBodyType = file.parseTypeReference(response);
+//     const resolvedType = typeResolver.resolveTypeOrThrow({
+//         type: typeof response !== "string" ? response.type : response,
+//         file
+//     });
+//     return await getObjectPropertyFromResolvedType(
+//         resolvedType,
+//         responseProperty,
+//         file,
+//         typeResolver
+//     )
+//         return HttpResponse.json(
+//             JsonResponse.nestedPropertyAsResponse({
+//                 docs,
+//                 responseBodyType,
+//                 responseProperty: await getObjectPropertyFromResolvedType(
+//                     resolvedType,
+//                     responseProperty,
+//                     file,
+//                     typeResolver
+//                 )
+//             })
+//         );
+//     }
+//     return HttpResponse.json(
+//         JsonResponse.response({
+//             docs,
+//             responseBodyType
+//         })
+//     );
+// }
 
 type PaginationPropertyComponents = CursorPaginationPropertyComponents | OffsetPaginationPropertyComponents;
 
