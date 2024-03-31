@@ -305,7 +305,7 @@ function validateQueryParameterProperty({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} must define a dot-delimited '${
                 propertyValidator.propertyID
-            }' property starting with $request (e.g $request.${propertyValidator.propertyID}).`
+            }' property starting with $request (e.g. $request.${propertyValidator.propertyID}).`
         });
         return violations;
     }
@@ -316,7 +316,7 @@ function validateQueryParameterProperty({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} is only compatible with '${
                 propertyValidator.propertyID
-            }' properties that are defined as query parameters (e.g $request.${propertyValidator.propertyID}).`
+            }' properties that are defined as query parameters (e.g. $request.${propertyValidator.propertyID}).`
         });
         return violations;
     }
@@ -325,9 +325,9 @@ function validateQueryParameterProperty({
     if (queryParameters == null) {
         violations.push({
             severity: "error",
-            message: `Pagination configuration for endpoint ${chalk.bold(
-                endpointId
-            )} is only compatible with in-lined request bodies that define at least one query parameter.`
+            message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies '${
+                propertyValidator.propertyID
+            }' ${queryParameterProperty}, but that query parameter does not exist.`
         });
         return violations;
     }
@@ -390,7 +390,7 @@ function validateResponseProperty({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} must define a dot-delimited '${
                 propertyValidator.propertyID
-            }' property starting with $response (e.g $response.${propertyValidator.propertyID}).`
+            }' property starting with $response (e.g. $response.${propertyValidator.propertyID}).`
         });
     }
 
