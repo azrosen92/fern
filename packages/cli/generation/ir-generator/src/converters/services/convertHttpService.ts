@@ -186,106 +186,6 @@ async function convertQueryParameter({
     };
 }
 
-async function convertPagination({
-    typeResolver,
-    file,
-    endpointSchema,
-    endpoint
-}: {
-    typeResolver: TypeResolver;
-    file: FernFileContext;
-    endpointSchema: RawSchemas.HttpEndpointSchema;
-    endpoint: HttpEndpoint;
-}): Promise<Pagination | undefined> {
-    const endpointPagination =
-        typeof endpointSchema.pagination === "boolean" ? file.rootApiFile.pagination : endpointSchema.pagination;
-    if (!endpointPagination) {
-        return undefined;
-    }
-    const pagePropertyComponents = getPaginationPropertyComponents(endpointPagination);
-    switch (pagePropertyComponents.type) {
-        case "cursor": {
-            const queryParameter = endpoint.queryParameters.find(
-                (queryParameter) => queryParameter.name.name.originalName === pagePropertyComponents.cursor
-            );
-            if (queryParameter == null || endpointSchema.response == null) {
-                return undefined;
-            }
-            const resolvedResponseType = resolveResponseType({
-                typeResolver,
-                file,
-                endpoint: endpointSchema
-            });
-            const nextCursorObjectProperty = await getNestedObjectPropertyFromResolvedType({
-                typeResolver,
-                file,
-                resolvedType: resolvedResponseType,
-                propertyComponents: pagePropertyComponents.next
-            });
-            if (nextCursorObjectProperty == null) {
-                return undefined;
-            }
-            const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
-                typeResolver,
-                file,
-                resolvedType: resolvedResponseType,
-                propertyComponents: pagePropertyComponents.results
-            });
-            if (resultsObjectProperty == null) {
-                return undefined;
-            }
-            return Pagination.cursor({
-                page: queryParameter,
-                next: {
-                    propertyPath: pagePropertyComponents.next.map((property) =>
-                        file.casingsGenerator.generateName(property)
-                    ),
-                    property: nextCursorObjectProperty
-                },
-                results: {
-                    propertyPath: pagePropertyComponents.results.map((property) =>
-                        file.casingsGenerator.generateName(property)
-                    ),
-                    property: resultsObjectProperty
-                }
-            });
-        }
-        case "offset": {
-            const queryParameter = endpoint.queryParameters.find(
-                (queryParameter) => queryParameter.name.name.originalName === pagePropertyComponents.offset
-            );
-            if (queryParameter == null) {
-                return undefined;
-            }
-            const resolvedResponseType = resolveResponseType({
-                typeResolver,
-                file,
-                endpoint: endpointSchema
-            });
-            const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
-                typeResolver,
-                file,
-                resolvedType: resolvedResponseType,
-                propertyComponents: pagePropertyComponents.results
-            });
-            if (resultsObjectProperty == null) {
-                return undefined;
-            }
-            return Pagination.offset({
-                page: queryParameter,
-                results: {
-                    propertyPath: pagePropertyComponents.results.map((property) =>
-                        file.casingsGenerator.generateName(property)
-                    ),
-                    property: resultsObjectProperty
-                }
-            });
-        }
-        default:
-            assertNever(pagePropertyComponents);
-    }
-}
-
 export async function convertPathParameters({
     pathParameters,
     location,
@@ -477,6 +377,148 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
         name: headerKey,
         wasExplicitlySet: false
     };
+}
+
+async function convertPagination({
+    typeResolver,
+    file,
+    endpointSchema,
+    endpoint
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    endpointSchema: RawSchemas.HttpEndpointSchema;
+    endpoint: HttpEndpoint;
+}): Promise<Pagination | undefined> {
+    const endpointPagination =
+        typeof endpointSchema.pagination === "boolean" ? file.rootApiFile.pagination : endpointSchema.pagination;
+    if (!endpointPagination) {
+        return undefined;
+    }
+    const paginationPropertyComponents = getPaginationPropertyComponents(endpointPagination);
+    switch (paginationPropertyComponents.type) {
+        case "cursor":
+            return await convertCursorPagination({
+                typeResolver,
+                file,
+                endpointSchema,
+                endpoint,
+                paginationPropertyComponents
+            });
+        case "offset":
+            return convertOffsetPagination({
+                typeResolver,
+                file,
+                endpointSchema,
+                endpoint,
+                paginationPropertyComponents
+            });
+        default:
+            assertNever(paginationPropertyComponents);
+    }
+}
+
+async function convertCursorPagination({
+    typeResolver,
+    file,
+    endpointSchema,
+    endpoint,
+    paginationPropertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    endpointSchema: RawSchemas.HttpEndpointSchema;
+    endpoint: HttpEndpoint;
+    paginationPropertyComponents: CursorPaginationPropertyComponents;
+}): Promise<Pagination | undefined> {
+    const queryParameter = endpoint.queryParameters.find(
+        (queryParameter) => queryParameter.name.name.originalName === paginationPropertyComponents.cursor
+    );
+    if (queryParameter == null || endpointSchema.response == null) {
+        return undefined;
+    }
+    const resolvedResponseType = resolveResponseType({
+        typeResolver,
+        file,
+        endpoint: endpointSchema
+    });
+    const nextCursorObjectProperty = await getNestedObjectPropertyFromResolvedType({
+        typeResolver,
+        file,
+        resolvedType: resolvedResponseType,
+        propertyComponents: paginationPropertyComponents.next
+    });
+    if (nextCursorObjectProperty == null) {
+        return undefined;
+    }
+    const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
+        typeResolver,
+        file,
+        resolvedType: resolvedResponseType,
+        propertyComponents: paginationPropertyComponents.results
+    });
+    if (resultsObjectProperty == null) {
+        return undefined;
+    }
+    return Pagination.cursor({
+        page: queryParameter,
+        next: {
+            propertyPath: paginationPropertyComponents.next.map((property) =>
+                file.casingsGenerator.generateName(property)
+            ),
+            property: nextCursorObjectProperty
+        },
+        results: {
+            propertyPath: paginationPropertyComponents.results.map((property) =>
+                file.casingsGenerator.generateName(property)
+            ),
+            property: resultsObjectProperty
+        }
+    });
+}
+
+async function convertOffsetPagination({
+    typeResolver,
+    file,
+    endpointSchema,
+    endpoint,
+    paginationPropertyComponents
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    endpointSchema: RawSchemas.HttpEndpointSchema;
+    endpoint: HttpEndpoint;
+    paginationPropertyComponents: OffsetPaginationPropertyComponents;
+}): Promise<Pagination | undefined> {
+    const queryParameter = endpoint.queryParameters.find(
+        (queryParameter) => queryParameter.name.name.originalName === paginationPropertyComponents.offset
+    );
+    if (queryParameter == null) {
+        return undefined;
+    }
+    const resolvedResponseType = resolveResponseType({
+        typeResolver,
+        file,
+        endpoint: endpointSchema
+    });
+    const resultsObjectProperty = await getNestedObjectPropertyFromResolvedType({
+        typeResolver,
+        file,
+        resolvedType: resolvedResponseType,
+        propertyComponents: paginationPropertyComponents.results
+    });
+    if (resultsObjectProperty == null) {
+        return undefined;
+    }
+    return Pagination.offset({
+        page: queryParameter,
+        results: {
+            propertyPath: paginationPropertyComponents.results.map((property) =>
+                file.casingsGenerator.generateName(property)
+            ),
+            property: resultsObjectProperty
+        }
+    });
 }
 
 async function getNestedObjectPropertyFromResolvedType({
