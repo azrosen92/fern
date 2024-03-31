@@ -4,7 +4,7 @@ types:
       - asc
       - desc
 
-  ListUsersCursorPaginationResponse: 
+  ListUsersPaginationResponse: 
     properties: 
       pages: optional<Page>
       total_count: 
@@ -36,11 +36,9 @@ service:
   base-path: /users
   endpoints:
     listWithCursorPagination:
-      # TODO: Update this with the new pagination syntax.
       pagination: 
-        type: cursor
-        page: $request.starting_after
-        next: $response.pages.next.starting_after
+        cursor: $request.starting_after
+        next_cursor: $response.page.next.starting_after
         results: $response.data
       method: GET
       path: ""
@@ -60,4 +58,28 @@ service:
             docs: | 
               The cursor used for pagination in order to fetch 
               the next page of results.
-      response: ListUsersCursorPaginationResponse
+      response: ListUsersPaginationResponse
+
+    listWithOffsetPagination:
+      pagination: 
+        offset: $request.starting_after
+        results: $response.data
+      method: GET
+      path: ""
+      request: 
+        name: ListUsersOffsetPaginationRequest
+        query-parameters: 
+          page: 
+            type: optional<integer>
+            docs: Defaults to first page
+          per_page: 
+            type: optional<integer>
+            docs: Defaults to per page
+          order: 
+            type: optional<Order> 
+          starting_after: 
+            type: optional<string>
+            docs: | 
+              The cursor used for pagination in order to fetch 
+              the next page of results.
+      response: ListUsersPaginationResponse
