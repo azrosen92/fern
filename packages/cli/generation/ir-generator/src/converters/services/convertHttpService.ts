@@ -154,6 +154,7 @@ export async function convertHttpService({
             })
         )
     };
+
     for (const endpoint of service.endpoints) {
         endpoint.pagination = convertPagination({ file, endpoint });
     }
@@ -185,19 +186,21 @@ async function convertQueryParameter({
     };
 }
 
-// TODO: Trim the $request and $resposne prefix from the schemas.
 async function convertPagination({
     file,
+    endpointSchema,
     endpoint
 }: {
     file: FernFileContext;
+    endpointSchema: RawSchemas.HttpEndpointSchema;
     endpoint: HttpEndpoint;
 }): Pagination | undefined {
     const endpointPagination =
-        typeof endpoint.pagination === "boolean" ? file.rootApiFile.pagination : endpoint.pagination;
+        typeof endpointSchema.pagination === "boolean" ? file.rootApiFile.pagination : endpointSchema.pagination;
     if (!endpointPagination) {
         return undefined;
     }
+    const pagePropertyComponents = getPaginationPropertyComponents(endpointPagination);
     switch (endpointPagination.type) {
         case "cursor": {
             const queryParameter = endpoint.queryParameters.find(
@@ -419,43 +422,46 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
     };
 }
 
-interface PagePropertyComponents {
-    page: string[];
-    next?: string[];
+type PaginationPropertyComponents = CursorPaginationPropertyComponents | OffsetPaginationPropertyComponents;
+
+interface CursorPaginationPropertyComponents {
+    type: "cursor";
+    cursor: string;
+    next: string[];
     results: string[];
 }
 
-function getPagePropertyComponents(endpointPagination: PaginationSchema): PagePropertyComponents {
+interface OffsetPaginationPropertyComponents {
+    type: "offset";
+    offset: string;
+    results: string[];
+}
+
+function getPaginationPropertyComponents(endpointPagination: PaginationSchema): PaginationPropertyComponents {
     switch (endpointPagination.type) {
         case "cursor":
             return {
-                page: endpointPagination.page.substring("$request.".length)?.split(".") ?? [],
-                next: endpointPagination.next.substring("$response.".length)?.split(".") ?? [],
-                results: endpointPagination.results.substring("$response.".length)?.split(".") ?? []
+                type: "cursor",
+                cursor: getRequestProperty(endpointPagination.page),
+                next: getResponsePropertyComponents(endpointPagination.next),
+                results: getResponsePropertyComponents(endpointPagination.results)
             };
         case "offset":
             return {
-                page: endpointPagination.page.substring("$request.".length)?.split(".") ?? [],
-                results: endpointPagination.results.substring("$response.".length)?.split(".") ?? []
+                type: "offset",
+                offset: getRequestProperty(endpointPagination.page),
+                results: getResponsePropertyComponents(endpointPagination.results)
             };
         default:
             assertNever(endpointPagination);
     }
 }
 
-function getRequestPropertyComponents(value: string): string[] | undefined {
-    const trimmed = trimPrefix(value, REQUEST_PREFIX);
-    return trimmed?.split(".");
+function getRequestProperty(value: string): string {
+    return value.substring("$request.".length);
 }
 
-function getResponsePropertyComponents(value: string): string[] | undefined {
-    const trimmed = trimPrefix(value, RESPONSE_PREFIX);
-    return trimmed?.split(".");
-}
-
-function trimPrefix(value: string, prefix: string): string | null {
-    if (value.startsWith(prefix)) {
-        return value.substring(prefix.length);
-    }
-    return null;
+function getResponsePropertyComponents(value: string): string[] {
+    const trimmed = value.substring("$response.".length);
+    return trimmed?.split(".") ?? [];
 }
