@@ -13,7 +13,7 @@ import {
     TypeReference
 } from "@fern-api/ir-sdk";
 import { FernWorkspace } from "@fern-api/workspace-loader";
-import { isVariablePathParameter, RawSchemas } from "@fern-api/yaml-schema";
+import { isRawObjectDefinition, isVariablePathParameter, RawSchemas } from "@fern-api/yaml-schema";
 import urlJoin from "url-join";
 import { FernFileContext } from "../../FernFileContext";
 import { IdGenerator } from "../../IdGenerator";
@@ -26,9 +26,10 @@ import { convertAvailability, convertDeclaration } from "../convertDeclaration";
 import { constructHttpPath } from "./constructHttpPath";
 import { convertExampleEndpointCall } from "./convertExampleEndpointCall";
 import { convertHttpRequestBody } from "./convertHttpRequestBody";
-import { convertHttpResponse, getObjectPropertyFromResolvedType, isRawObjectDefinition } from "./convertHttpResponse";
+import { convertHttpResponse } from "./convertHttpResponse";
 import { convertHttpSdkRequest } from "./convertHttpSdkRequest";
 import { convertResponseErrors } from "./convertResponseErrors";
+import { getObjectPropertyFromResolvedType } from "./getObjectPropertyFromResolvedType";
 
 export async function convertHttpService({
     rootPathParameters,
