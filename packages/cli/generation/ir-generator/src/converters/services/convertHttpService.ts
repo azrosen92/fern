@@ -3,10 +3,7 @@ import {
     HttpEndpoint,
     HttpHeader,
     HttpMethod,
-    HttpResponse,
     HttpService,
-    ObjectProperty,
-    ObjectTypeDeclaration,
     Pagination,
     PaginationProperty,
     PathParameter,
@@ -28,7 +25,7 @@ import { convertAvailability, convertDeclaration } from "../convertDeclaration";
 import { constructHttpPath } from "./constructHttpPath";
 import { convertExampleEndpointCall } from "./convertExampleEndpointCall";
 import { convertHttpRequestBody } from "./convertHttpRequestBody";
-import { convertHttpResponse } from "./convertHttpResponse";
+import { convertHttpResponse, getObjectPropertyFromResolvedType } from "./convertHttpResponse";
 import { convertHttpSdkRequest } from "./convertHttpSdkRequest";
 import { convertResponseErrors } from "./convertResponseErrors";
 
@@ -151,6 +148,7 @@ export async function convertHttpService({
                 };
                 httpEndpoint.id = IdGenerator.generateEndpointId(serviceName, httpEndpoint);
                 httpEndpoint.pagination = convertPagination({
+                    typeResolver,
                     file,
                     endpointSchema: endpoint,
                     endpoint: httpEndpoint
@@ -188,10 +186,12 @@ async function convertQueryParameter({
 }
 
 async function convertPagination({
+    typeResolver,
     file,
     endpointSchema,
     endpoint
 }: {
+    typeResolver: TypeResolver;
     file: FernFileContext;
     endpointSchema: RawSchemas.HttpEndpointSchema;
     endpoint: HttpEndpoint;
@@ -207,12 +207,38 @@ async function convertPagination({
             const queryParameter = endpoint.queryParameters.find(
                 (queryParameter) => queryParameter.name.name.originalName === pagePropertyComponents.cursor
             );
-            if (queryParameter == null) {
+            if (queryParameter == null || endpointSchema.response == null) {
                 return undefined;
             }
-            const nextCursorObjectProperty = undefined;
+            const resolvedResponseType = typeResolver.resolveTypeOrThrow({
+                type:
+                    typeof endpointSchema.response === "string"
+                        ? endpointSchema.response
+                        : endpointSchema.response.type,
+                file
+            });
+            const nextCursorObjectProperty = await getObjectPropertyFromResolvedType(
+                resolvedResponseType,
+                pagePropertyComponents.next[0] ?? "", // TODO: Fix this.
+                file,
+                typeResolver
+            );
+            const resultsObjectProperty = await getObjectPropertyFromResolvedType(
+                resolvedResponseType,
+                pagePropertyComponents.results[0] ?? "", // TODO: Fix this.
+                file,
+                typeResolver
+            );
             return Pagination.cursor({
-                page: queryParameter
+                page: queryParameter,
+                next: {
+                    propertyPath: undefined, // TODO: Fix this.
+                    property: nextCursorObjectProperty
+                },
+                results: {
+                    propertyPath: undefined, // TODO: Fix this.
+                    property: resultsObjectProperty
+                }
             });
         }
         case "offset": {
@@ -425,10 +451,10 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
 }
 
 function getPaginationPropertyFromResponse({
-    response,
+    resv,
     propertyComponents
 }: {
-    response: HttpResponse;
+    responseSchema: RawSchemas.HttpResponseSchema;
     propertyComponents: string[];
 }): PaginationProperty | undefined {
     if (response.type !== "json" || response.value.type !== "response") {
@@ -439,62 +465,24 @@ function getPaginationPropertyFromResponse({
     return undefined;
 }
 
-function getObjectPropertyFromObjectTypeDeclaration({
-    objectTypeDeclaration,
-    propertyComponents
-}: {
-    objectTypeDeclaration: ObjectTypeDeclaration;
-    propertyComponents: string[];
-}): ObjectProperty | undefined {
-    const objectProperty = objectTypeDeclaration.properties.find(
-        (property) => property.name.name.originalName === propertyComponents?.[0]
-    );
-    if (objectProperty == null) {
-        return undefined;
-    }
-    if (propertyComponents.length === 1) {
-        return objectProperty;
-    }
-    // TODO: Recursively visit the nested object.
-    return undefined;
-}
-
-// function getObjectPropertyFromResolvedType(
-//     resolvedType: ResolvedType,
-//     propertyComponents: string[],
-//     file: FernFileContext,
-//     typeResolver: TypeResolver
-// ): Promise<HttpResponse> {
-//     const responseBodyType = file.parseTypeReference(response);
-//     const resolvedType = typeResolver.resolveTypeOrThrow({
-//         type: typeof response !== "string" ? response.type : response,
-//         file
-//     });
-//     return await getObjectPropertyFromResolvedType(
-//         resolvedType,
-//         responseProperty,
-//         file,
-//         typeResolver
-//     )
-//         return HttpResponse.json(
-//             JsonResponse.nestedPropertyAsResponse({
-//                 docs,
-//                 responseBodyType,
-//                 responseProperty: await getObjectPropertyFromResolvedType(
-//                     resolvedType,
-//                     responseProperty,
-//                     file,
-//                     typeResolver
-//                 )
-//             })
-//         );
-//     }
-//     return HttpResponse.json(
-//         JsonResponse.response({
-//             docs,
-//             responseBodyType
-//         })
+// function getObjectPropertyFromObjectTypeDeclaration({
+//     objectTypeDeclaration,
+//     propertyComponents
+// }: {
+//     objectTypeDeclaration: ObjectTypeDeclaration;
+//     propertyComponents: string[];
+// }): ObjectProperty | undefined {
+//     const objectProperty = objectTypeDeclaration.properties.find(
+//         (property) => property.name.name.originalName === propertyComponents?.[0]
 //     );
+//     if (objectProperty == null) {
+//         return undefined;
+//     }
+//     if (propertyComponents.length === 1) {
+//         return objectProperty;
+//     }
+//     // TODO: Recursively visit the nested object.
+//     return undefined;
 // }
 
 type PaginationPropertyComponents = CursorPaginationPropertyComponents | OffsetPaginationPropertyComponents;

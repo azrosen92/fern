@@ -497,6 +497,7 @@ function isValidCursorProperty({
     });
 }
 
+// TODO: Use something similar to this in the IR generartor.
 function resolvedTypeHasProperty({
     typeResolver,
     file,
