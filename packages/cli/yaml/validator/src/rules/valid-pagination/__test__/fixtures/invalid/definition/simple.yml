@@ -6,6 +6,7 @@ types:
         type: integer
         docs: The totall number of /users
       data: list<User>
+      valid: boolean
 
   Page: 
     properties: 
@@ -30,7 +31,7 @@ service:
   auth: false
   base-path: /users
   endpoints:
-    listWithInvalidCursorPagination:
+    listWithPaginationTypos:
       pagination: 
         cursor: $request.typo
         next_cursor: $response.typo.next.starting_after
@@ -38,7 +39,41 @@ service:
       method: GET
       path: ""
       request: 
-        name: ListUsersRequest
+        name: ListWithPaginationTyposRequest
+        query-parameters: 
+          starting_after: 
+            type: optional<string>
+            docs: | 
+              The cursor used for pagination in order to fetch 
+              the next page of results.
+      response: ListUsersResponse
+
+    listWithInvalidCursorPaginationType:
+      pagination: 
+        cursor: $request.user
+        next_cursor: $response.valid
+        results: $response.data
+      method: GET
+      path: ""
+      request: 
+        name: ListWithInvalidCursorPaginationTypeRequest
+        query-parameters: 
+          starting_after: 
+            type: optional<string>
+            docs: | 
+              The cursor used for pagination in order to fetch 
+              the next page of results.
+          user: optional<User>
+      response: ListUsersResponse
+
+    listWithInvalidOffsetPaginationType:
+      pagination: 
+        offset: $request.starting_after
+        results: $response.data
+      method: GET
+      path: ""
+      request: 
+        name: ListWithInvalidOffsetPaginationTypeRequest
         query-parameters: 
           starting_after: 
             type: optional<string>

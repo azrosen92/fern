@@ -360,7 +360,7 @@ function validateQueryParameterProperty({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies '${
                 propertyValidator.propertyID
-            }' ${queryParameterProperty}, which is not a valid ${propertyValidator.propertyID} type.`
+            }' ${queryParameterProperty}, which is not a valid '${propertyValidator.propertyID}' type.`
         });
     }
 
@@ -407,7 +407,7 @@ function validateResponseProperty({
             severity: "error",
             message: `Pagination configuration for endpoint ${chalk.bold(endpointId)} specifies '${
                 propertyValidator.propertyID
-            }' ${responseProperty}, which is not specified as a response property.`
+            }' ${responseProperty}, which is not a valid '${propertyValidator.propertyID}' type.`
         });
     }
 
@@ -494,6 +494,7 @@ function resolvedTypeHasProperty({
     if (objectSchema == null) {
         return false;
     }
+    // TODO: We need to support extended properties here.
     const property = objectSchema.properties?.[propertyComponents[0] ?? ""];
     if (property == null) {
         return false;

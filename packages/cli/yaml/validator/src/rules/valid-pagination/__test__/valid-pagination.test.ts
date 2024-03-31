@@ -28,22 +28,43 @@ describe("valid-pagination", () => {
         const expectedViolations: ValidationViolation[] = [
             {
                 message:
-                    "Pagination configuration for endpoint listWithInvalidCursorPagination specifies 'cursor' $request.typo, but that query parameter does not exist.",
-                nodePath: ["service", "endpoints", "listWithInvalidCursorPagination"],
+                    "Pagination configuration for endpoint listWithPaginationTypos specifies 'cursor' $request.typo, but that query parameter does not exist.",
+                nodePath: ["service", "endpoints", "listWithPaginationTypos"],
                 relativeFilepath: RelativeFilePath.of("simple.yml"),
                 severity: "error"
             },
             {
                 message:
-                    "Pagination configuration for endpoint listWithInvalidCursorPagination specifies 'next_cursor' $response.typo.next.starting_after, which is not specified as a response property.",
-                nodePath: ["service", "endpoints", "listWithInvalidCursorPagination"],
+                    "Pagination configuration for endpoint listWithPaginationTypos specifies 'next_cursor' $response.typo.next.starting_after, which is not a valid 'next_cursor' type.",
+                nodePath: ["service", "endpoints", "listWithPaginationTypos"],
                 relativeFilepath: RelativeFilePath.of("simple.yml"),
                 severity: "error"
             },
             {
                 message:
-                    "Pagination configuration for endpoint listWithInvalidCursorPagination specifies 'results' $response.typo, which is not specified as a response property.",
-                nodePath: ["service", "endpoints", "listWithInvalidCursorPagination"],
+                    "Pagination configuration for endpoint listWithPaginationTypos specifies 'results' $response.typo, which is not a valid 'results' type.",
+                nodePath: ["service", "endpoints", "listWithPaginationTypos"],
+                relativeFilepath: RelativeFilePath.of("simple.yml"),
+                severity: "error"
+            },
+            {
+                message:
+                    "Pagination configuration for endpoint listWithInvalidCursorPaginationType specifies 'cursor' $request.user, which is not a valid 'cursor' type.",
+                nodePath: ["service", "endpoints", "listWithInvalidCursorPaginationType"],
+                relativeFilepath: RelativeFilePath.of("simple.yml"),
+                severity: "error"
+            },
+            {
+                message:
+                    "Pagination configuration for endpoint listWithInvalidCursorPaginationType specifies 'next_cursor' $response.valid, which is not a valid 'next_cursor' type.",
+                nodePath: ["service", "endpoints", "listWithInvalidCursorPaginationType"],
+                relativeFilepath: RelativeFilePath.of("simple.yml"),
+                severity: "error"
+            },
+            {
+                message:
+                    "Pagination configuration for endpoint listWithInvalidOffsetPaginationType specifies 'offset' $request.starting_after, which is not a valid 'offset' type.",
+                nodePath: ["service", "endpoints", "listWithInvalidOffsetPaginationType"],
                 relativeFilepath: RelativeFilePath.of("simple.yml"),
                 severity: "error"
             }
