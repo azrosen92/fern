@@ -560,6 +560,70 @@ async function getNestedObjectPropertyFromResolvedType({
     });
 }
 
+async function getPropertiesFromObjectSchema({
+    typeResolver,
+    file,
+    objectSchema,
+    property
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    objectSchema: RawSchemas.ObjectSchema;
+    property: string;
+}): Promise<string> {
+    const properties = await getAllPropertiesForRawObjectSchema(objectSchema, file, typeResolver);
+    const propertyType = properties[property];
+    if (propertyType == null) {
+        throw new Error(`Response does not have a property named ${property}.`);
+    }
+    return propertyType;
+}
+
+async function getAllPropertiesForRawObjectSchema(
+    objectSchema: RawSchemas.ObjectSchema,
+    file: FernFileContext,
+    typeResolver: TypeResolver
+): Promise<Record<string, string>> {
+    let extendedTypes: string[] = [];
+    if (typeof objectSchema.extends === "string") {
+        extendedTypes = [objectSchema.extends];
+    } else if (Array.isArray(objectSchema.extends)) {
+        extendedTypes = objectSchema.extends;
+    }
+
+    const properties: Record<string, string> = {};
+    for (const extendedType of extendedTypes) {
+        const extendedProperties = await getAllPropertiesForExtendedType(extendedType, file, typeResolver);
+        Object.entries(extendedProperties).map(([propertyKey, propertyType]) => {
+            properties[propertyKey] = propertyType;
+        });
+    }
+
+    if (objectSchema.properties != null) {
+        Object.entries(objectSchema.properties).map(([propertyKey, propertyType]) => {
+            properties[propertyKey] = typeof propertyType === "string" ? propertyType : propertyType.type;
+        });
+    }
+
+    return properties;
+}
+
+async function getAllPropertiesForExtendedType(
+    extendedType: string,
+    file: FernFileContext,
+    typeResolver: TypeResolver
+): Promise<Record<string, string>> {
+    const resolvedType = typeResolver.resolveNamedTypeOrThrow({
+        referenceToNamedType: extendedType,
+        file
+    });
+    if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
+        return await getAllPropertiesForRawObjectSchema(resolvedType.declaration, file, typeResolver);
+    }
+    // This should be unreachable; extended types must be named objects.
+    throw new Error(`Extended type ${extendedType} must be another named type`);
+}
+
 function resolveResponseType({
     endpoint,
     typeResolver,
