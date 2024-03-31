@@ -146,15 +146,13 @@ export async function convertHttpService({
                                   })
                               )
                             : [],
-                    pagination: undefined
+                    pagination: await convertPagination({
+                        typeResolver,
+                        file,
+                        endpointSchema: endpoint
+                    })
                 };
                 httpEndpoint.id = IdGenerator.generateEndpointId(serviceName, httpEndpoint);
-                httpEndpoint.pagination = await convertPagination({
-                    typeResolver,
-                    file,
-                    endpointSchema: endpoint,
-                    endpoint: httpEndpoint
-                });
                 return httpEndpoint;
             })
         )
@@ -383,13 +381,11 @@ export function getHeaderName({ headerKey, header }: { headerKey: string; header
 async function convertPagination({
     typeResolver,
     file,
-    endpointSchema,
-    endpoint
+    endpointSchema
 }: {
     typeResolver: TypeResolver;
     file: FernFileContext;
     endpointSchema: RawSchemas.HttpEndpointSchema;
-    endpoint: HttpEndpoint;
 }): Promise<Pagination | undefined> {
     const endpointPagination =
         typeof endpointSchema.pagination === "boolean" ? file.rootApiFile.pagination : endpointSchema.pagination;
@@ -403,7 +399,6 @@ async function convertPagination({
                 typeResolver,
                 file,
                 endpointSchema,
-                endpoint,
                 paginationPropertyComponents
             });
         case "offset":
@@ -411,7 +406,6 @@ async function convertPagination({
                 typeResolver,
                 file,
                 endpointSchema,
-                endpoint,
                 paginationPropertyComponents
             });
         default:
@@ -423,19 +417,18 @@ async function convertCursorPagination({
     typeResolver,
     file,
     endpointSchema,
-    endpoint,
     paginationPropertyComponents
 }: {
     typeResolver: TypeResolver;
     file: FernFileContext;
     endpointSchema: RawSchemas.HttpEndpointSchema;
-    endpoint: HttpEndpoint;
     paginationPropertyComponents: CursorPaginationPropertyComponents;
 }): Promise<Pagination | undefined> {
-    const queryParameter = endpoint.queryParameters.find(
-        (queryParameter) => queryParameter.name.name.originalName === paginationPropertyComponents.cursor
-    );
-    if (queryParameter == null || endpointSchema.response == null) {
+    const queryParameterSchema =
+        typeof endpointSchema.request !== "string" && endpointSchema.request?.["query-parameters"] != null
+            ? endpointSchema?.request?.["query-parameters"]?.[paginationPropertyComponents.cursor]
+            : undefined;
+    if (queryParameterSchema == null) {
         return undefined;
     }
     const resolvedResponseType = resolveResponseType({
@@ -462,7 +455,11 @@ async function convertCursorPagination({
         return undefined;
     }
     return Pagination.cursor({
-        page: queryParameter,
+        page: await convertQueryParameter({
+            file,
+            queryParameterKey: paginationPropertyComponents.cursor,
+            queryParameter: queryParameterSchema
+        }),
         next: {
             propertyPath: paginationPropertyComponents.next.map((property) =>
                 file.casingsGenerator.generateName(property)
@@ -482,19 +479,18 @@ async function convertOffsetPagination({
     typeResolver,
     file,
     endpointSchema,
-    endpoint,
     paginationPropertyComponents
 }: {
     typeResolver: TypeResolver;
     file: FernFileContext;
     endpointSchema: RawSchemas.HttpEndpointSchema;
-    endpoint: HttpEndpoint;
     paginationPropertyComponents: OffsetPaginationPropertyComponents;
 }): Promise<Pagination | undefined> {
-    const queryParameter = endpoint.queryParameters.find(
-        (queryParameter) => queryParameter.name.name.originalName === paginationPropertyComponents.offset
-    );
-    if (queryParameter == null) {
+    const queryParameterSchema =
+        typeof endpointSchema.request !== "string" && endpointSchema.request?.["query-parameters"] != null
+            ? endpointSchema?.request?.["query-parameters"]?.[paginationPropertyComponents.offset]
+            : undefined;
+    if (queryParameterSchema == null) {
         return undefined;
     }
     const resolvedResponseType = resolveResponseType({
@@ -512,7 +508,11 @@ async function convertOffsetPagination({
         return undefined;
     }
     return Pagination.offset({
-        page: queryParameter,
+        page: await convertQueryParameter({
+            file,
+            queryParameterKey: paginationPropertyComponents.offset,
+            queryParameter: queryParameterSchema
+        }),
         results: {
             propertyPath: paginationPropertyComponents.results.map((property) =>
                 file.casingsGenerator.generateName(property)
