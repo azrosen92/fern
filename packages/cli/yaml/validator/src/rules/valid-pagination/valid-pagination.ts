@@ -13,7 +13,10 @@ import { CASINGS_GENERATOR } from "../../utils/casingsGenerator";
 const REQUEST_PREFIX = "$request.";
 const RESPONSE_PREFIX = "$response.";
 
-type PropertyValidator = OffsetPropertyValidator | CursorPropertyValidator | ResultsPropertyValidator;
+interface PropertyValidator {
+    propertyID: string;
+    validate: PropertyValidatorFunc;
+}
 
 type PropertyValidatorFunc = ({
     typeResolver,
@@ -26,24 +29,6 @@ type PropertyValidatorFunc = ({
     resolvedType: ResolvedType | undefined;
     propertyComponents: string[];
 }) => boolean;
-
-export interface OffsetPropertyValidator {
-    type: "offset";
-    propertyID: string;
-    validate: PropertyValidatorFunc;
-}
-
-export interface CursorPropertyValidator {
-    type: "cursor";
-    propertyID: string;
-    validate: PropertyValidatorFunc;
-}
-
-export interface ResultsPropertyValidator {
-    type: "results";
-    propertyID: string;
-    validate: PropertyValidatorFunc;
-}
 
 export const ValidPaginationRule: Rule = {
     name: "valid-pagination",
@@ -217,7 +202,6 @@ function validatePageProperty({
         file,
         queryParameterProperty: cursorPagination.page,
         propertyValidator: {
-            type: "cursor",
             propertyID: "page",
             validate: isValidCursorProperty
         }
@@ -244,7 +228,6 @@ function validateOffsetProperty({
         file,
         queryParameterProperty: offsetPagination.page,
         propertyValidator: {
-            type: "offset",
             propertyID: "page",
             validate: isValidOffsetProperty
         }
@@ -271,7 +254,6 @@ function validateNextCursorProperty({
         resolvedResponseType,
         responseProperty: nextProperty,
         propertyValidator: {
-            type: "cursor",
             propertyID: "next",
             validate: isValidCursorProperty
         }
@@ -298,7 +280,6 @@ function validateResultsProperty({
         resolvedResponseType,
         responseProperty: resultsProperty,
         propertyValidator: {
-            type: "results",
             propertyID: "results",
             validate: isValidResultsProperty
         }
