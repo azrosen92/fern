@@ -441,7 +441,7 @@ function getPaginationPropertyFromResponse({
 
 function getObjectPropertyFromObjectTypeDeclaration({
     objectTypeDeclaration,
-    propertyComponents,
+    propertyComponents
 }: {
     objectTypeDeclaration: ObjectTypeDeclaration;
     propertyComponents: string[];
@@ -457,7 +457,7 @@ function getObjectPropertyFromObjectTypeDeclaration({
     }
     // TODO: Recursively visit the nested object.
     return undefined;
-})
+}
 
 // function getObjectPropertyFromResolvedType(
 //     resolvedType: ResolvedType,
