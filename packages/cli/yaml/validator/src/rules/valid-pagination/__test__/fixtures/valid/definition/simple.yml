@@ -36,11 +36,9 @@ service:
   base-path: /users
   endpoints:
     listWithCursorPagination:
-      # TODO: Update this with the new pagination syntax.
       pagination: 
-        type: cursor
-        page: $request.starting_after
-        next: $response.page.next.starting_after
+        cursor: $request.starting_after
+        next_cursor: $response.page.next.starting_after
         results: $response.data
       method: GET
       path: ""

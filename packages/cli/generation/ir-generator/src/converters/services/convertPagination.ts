@@ -69,7 +69,7 @@ async function convertCursorPagination({
         typeResolver,
         file,
         resolvedType: resolvedResponseType,
-        propertyComponents: paginationPropertyComponents.next
+        propertyComponents: paginationPropertyComponents.next_cursor
     });
     if (nextCursorObjectProperty == null) {
         return undefined;
@@ -90,7 +90,7 @@ async function convertCursorPagination({
             queryParameter: queryParameterSchema
         }),
         next: {
-            propertyPath: paginationPropertyComponents.next.map((property) =>
+            propertyPath: paginationPropertyComponents.next_cursor.map((property) =>
                 file.casingsGenerator.generateName(property)
             ),
             property: nextCursorObjectProperty
@@ -292,7 +292,7 @@ type PaginationPropertyComponents = CursorPaginationPropertyComponents | OffsetP
 interface CursorPaginationPropertyComponents {
     type: "cursor";
     cursor: string;
-    next: string[];
+    next_cursor: string[];
     results: string[];
 }
 
@@ -305,23 +305,19 @@ interface OffsetPaginationPropertyComponents {
 function getPaginationPropertyComponents(
     endpointPagination: RawSchemas.PaginationSchema
 ): PaginationPropertyComponents {
-    switch (endpointPagination.type) {
-        case "cursor":
-            return {
-                type: "cursor",
-                cursor: getRequestProperty(endpointPagination.page),
-                next: getResponsePropertyComponents(endpointPagination.next),
-                results: getResponsePropertyComponents(endpointPagination.results)
-            };
-        case "offset":
-            return {
-                type: "offset",
-                offset: getRequestProperty(endpointPagination.page),
-                results: getResponsePropertyComponents(endpointPagination.results)
-            };
-        default:
-            assertNever(endpointPagination);
+    if (isRawOffsetPaginationSchema(endpointPagination)) {
+        return {
+            type: "offset",
+            offset: getRequestProperty(endpointPagination.offset),
+            results: getResponsePropertyComponents(endpointPagination.results)
+        };
     }
+    return {
+        type: "cursor",
+        cursor: getRequestProperty(endpointPagination.cursor),
+        next_cursor: getResponsePropertyComponents(endpointPagination.next_cursor),
+        results: getResponsePropertyComponents(endpointPagination.results)
+    };
 }
 
 function getRequestProperty(value: string): string {
@@ -331,4 +327,13 @@ function getRequestProperty(value: string): string {
 function getResponsePropertyComponents(value: string): string[] {
     const trimmed = value.substring("$response.".length);
     return trimmed?.split(".") ?? [];
+}
+
+function isRawOffsetPaginationSchema(
+    rawPaginationSchema: RawSchemas.PaginationSchema
+): rawPaginationSchema is RawSchemas.OffsetPaginationSchema {
+    return (
+        (rawPaginationSchema as RawSchemas.OffsetPaginationSchema).offset != null &&
+        (rawPaginationSchema as RawSchemas.OffsetPaginationSchema).results != null
+    );
 }

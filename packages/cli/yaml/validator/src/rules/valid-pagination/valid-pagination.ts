@@ -52,26 +52,22 @@ export const ValidPaginationRule: Rule = {
                         rootApiFile: workspace.definition.rootApiFile.contents
                     });
 
-                    switch (endpointPagination.type) {
-                        case "cursor": {
-                            return validateCursorPagination({
-                                endpointId,
-                                endpoint,
-                                typeResolver,
-                                file,
-                                cursorPagination: endpointPagination
-                            });
-                        }
-                        case "offset": {
-                            return validateOffsetPagination({
-                                endpointId,
-                                endpoint,
-                                typeResolver,
-                                file,
-                                offsetPagination: endpointPagination
-                            });
-                        }
+                    if (isRawCursorPaginationSchema(endpointPagination)) {
+                        return validateCursorPagination({
+                            endpointId,
+                            endpoint,
+                            typeResolver,
+                            file,
+                            cursorPagination: endpointPagination
+                        });
                     }
+                    return validateOffsetPagination({
+                        endpointId,
+                        endpoint,
+                        typeResolver,
+                        file,
+                        offsetPagination: endpointPagination
+                    });
                 }
             }
         };
@@ -94,7 +90,7 @@ function validateCursorPagination({
     const violations: RuleViolation[] = [];
 
     violations.push(
-        ...validatePageProperty({
+        ...validateCursorProperty({
             endpointId,
             endpoint,
             typeResolver,
@@ -118,7 +114,7 @@ function validateCursorPagination({
             typeResolver,
             file,
             resolvedResponseType,
-            nextProperty: cursorPagination.next
+            nextProperty: cursorPagination.next_cursor
         })
     );
 
@@ -182,7 +178,7 @@ function validateOffsetPagination({
     return violations;
 }
 
-function validatePageProperty({
+function validateCursorProperty({
     endpointId,
     endpoint,
     typeResolver,
@@ -200,9 +196,9 @@ function validatePageProperty({
         endpoint,
         typeResolver,
         file,
-        queryParameterProperty: cursorPagination.page,
+        queryParameterProperty: cursorPagination.cursor,
         propertyValidator: {
-            propertyID: "page",
+            propertyID: "cursor",
             validate: isValidCursorProperty
         }
     });
@@ -226,9 +222,9 @@ function validateOffsetProperty({
         endpoint,
         typeResolver,
         file,
-        queryParameterProperty: offsetPagination.page,
+        queryParameterProperty: offsetPagination.offset,
         propertyValidator: {
-            propertyID: "page",
+            propertyID: "offset",
             validate: isValidOffsetProperty
         }
     });
@@ -254,7 +250,7 @@ function validateNextCursorProperty({
         resolvedResponseType,
         responseProperty: nextProperty,
         propertyValidator: {
-            propertyID: "next",
+            propertyID: "next_cursor",
             validate: isValidCursorProperty
         }
     });
@@ -593,4 +589,14 @@ function trimPrefix(value: string, prefix: string): string | null {
         return value.substring(prefix.length);
     }
     return null;
+}
+
+function isRawCursorPaginationSchema(
+    rawPaginationSchema: RawSchemas.PaginationSchema
+): rawPaginationSchema is RawSchemas.CursorPaginationSchema {
+    return (
+        (rawPaginationSchema as RawSchemas.CursorPaginationSchema).cursor != null &&
+        (rawPaginationSchema as RawSchemas.CursorPaginationSchema).next_cursor != null &&
+        (rawPaginationSchema as RawSchemas.CursorPaginationSchema).results != null
+    );
 }

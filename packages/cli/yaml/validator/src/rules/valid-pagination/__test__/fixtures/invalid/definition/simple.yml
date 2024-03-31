@@ -31,11 +31,9 @@ service:
   base-path: /users
   endpoints:
     listWithInvalidCursorPagination:
-      # TODO: Update this with the new pagination syntax.
       pagination: 
-        type: cursor
-        page: $request.typo
-        next: $response.typo.next.starting_after
+        cursor: $request.typo
+        next_cursor: $response.typo.next.starting_after
         results: $response.typo
       method: GET
       path: ""
