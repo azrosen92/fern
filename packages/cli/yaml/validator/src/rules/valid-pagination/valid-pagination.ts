@@ -527,15 +527,23 @@ function getPropertyTypeFromObjectSchema({
     objectSchema: RawSchemas.ObjectSchema;
     property: string;
 }): string | undefined {
-    const properties = getAllPropertiesForRawObjectSchema(objectSchema, file, typeResolver);
+    const properties = getAllPropertiesForRawObjectSchema({
+        typeResolver,
+        file,
+        objectSchema
+    });
     return properties[property];
 }
 
-function getAllPropertiesForRawObjectSchema(
-    objectSchema: RawSchemas.ObjectSchema,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Record<string, string> {
+function getAllPropertiesForRawObjectSchema({
+    typeResolver,
+    file,
+    objectSchema
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    objectSchema: RawSchemas.ObjectSchema;
+}): Record<string, string> {
     let extendedTypes: string[] = [];
     if (typeof objectSchema.extends === "string") {
         extendedTypes = [objectSchema.extends];
@@ -545,7 +553,11 @@ function getAllPropertiesForRawObjectSchema(
 
     const properties: Record<string, string> = {};
     for (const extendedType of extendedTypes) {
-        const extendedProperties = getAllPropertiesForExtendedType(extendedType, file, typeResolver);
+        const extendedProperties = getAllPropertiesForExtendedType({
+            typeResolver,
+            file,
+            extendedType
+        });
         Object.entries(extendedProperties).map(([propertyKey, propertyType]) => {
             properties[propertyKey] = propertyType;
         });
@@ -560,17 +572,25 @@ function getAllPropertiesForRawObjectSchema(
     return properties;
 }
 
-function getAllPropertiesForExtendedType(
-    extendedType: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Record<string, string> {
+function getAllPropertiesForExtendedType({
+    typeResolver,
+    file,
+    extendedType
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    extendedType: string;
+}): Record<string, string> {
     const resolvedType = typeResolver.resolveNamedTypeOrThrow({
         referenceToNamedType: extendedType,
         file
     });
     if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
-        return getAllPropertiesForRawObjectSchema(resolvedType.declaration, file, typeResolver);
+        return getAllPropertiesForRawObjectSchema({
+            typeResolver,
+            file,
+            objectSchema: resolvedType.declaration
+        });
     }
     return {};
 }
