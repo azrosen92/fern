@@ -4,6 +4,23 @@ types:
       - asc
       - desc
 
+  UserListContainer: 
+    properties: 
+      users: list<User>
+
+  UserPage:
+    properties:
+      data: UserListContainer
+      next: optional<uuid>
+
+  ListUsersExtendedResponse: 
+    extends:
+      - UserPage
+    properties:
+      total_count: 
+        type: integer
+        docs: The totall number of /users
+ 
   ListUsersPaginationResponse: 
     properties: 
       page: optional<Page>
@@ -42,9 +59,9 @@ service:
         results: $response.data
       method: GET
       path: ""
-      request: 
+      request:
         name: ListUsersCursorPaginationRequest
-        query-parameters: 
+        query-parameters:
           page: 
             type: optional<integer>
             docs: Defaults to first page
@@ -66,9 +83,9 @@ service:
         results: $response.data
       method: GET
       path: ""
-      request: 
+      request:
         name: ListUsersOffsetPaginationRequest
-        query-parameters: 
+        query-parameters:
           page: 
             type: optional<integer>
             docs: Defaults to first page
@@ -83,3 +100,16 @@ service:
               The cursor used for pagination in order to fetch 
               the next page of results.
       response: ListUsersPaginationResponse
+
+    listWithExtendedResults:
+      pagination: 
+        cursor: $request.cursor
+        next_cursor: $response.next
+        results: $response.data.users
+      method: GET
+      path: ""
+      request:
+        name: ListUsersExtendedRequest
+        query-parameters:
+          cursor: optional<uuid>
+      response: ListUsersExtendedResponse
