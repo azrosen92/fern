@@ -4,6 +4,10 @@ types:
       - asc
       - desc
 
+  WithUsers:
+    properties:
+      users: list<User>
+
   ListUsersCursorPaginationResponse: 
     properties: 
       page: optional<Page>
@@ -11,6 +15,15 @@ types:
         type: integer
         docs: The totall number of /users
       data: list<User>
+
+  ListUsersOffsetPaginationResponse: 
+    extends:
+      - WithUsers
+    properties: 
+      page: optional<Page>
+      total_count: 
+        type: integer
+        docs: The totall number of /users
 
   Page: 
     properties: 
@@ -59,3 +72,19 @@ service:
               The cursor used for pagination in order to fetch 
               the next page of results.
       response: ListUsersCursorPaginationResponse
+
+    listWithOffsetPagination:
+      pagination: 
+        offset: $request.pageNumber
+        results: $response.users
+      method: GET
+      path: ""
+      request: 
+        name: ListUsersOffsetPaginationRequest
+        query-parameters: 
+          pageNumber: 
+            type: optional<integer>
+            docs: | 
+              The offset used for pagination in order to fetch
+              the next page of results.
+      response: ListUsersOffsetPaginationResponse

@@ -540,12 +540,11 @@ function isValidCursorType(resolvedType: ResolvedType | undefined): boolean {
 }
 
 function isValidOffsetType(resolvedType: ResolvedType | undefined): boolean {
-    return (
-        resolvedType?._type === "primitive" &&
-        (resolvedType.primitive === "INTEGER" ||
-            resolvedType.primitive === "LONG" ||
-            resolvedType.primitive === "DOUBLE")
-    );
+    const primitiveType = maybePrimitiveType(resolvedType);
+    if (primitiveType == null) {
+        return false;
+    }
+    return primitiveType === "INTEGER" || primitiveType === "LONG" || primitiveType === "DOUBLE";
 }
 
 function isValidResultsType(resolvedType: ResolvedType | undefined): boolean {
