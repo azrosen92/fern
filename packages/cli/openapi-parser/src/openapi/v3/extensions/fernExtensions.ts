@@ -72,9 +72,8 @@ export const FernOpenAPIExtension = {
      *   paths:
      *     /path/to/my/endpoint:
      *       x-fern-pagination:
-     *         type: "cursor"
-     *         page: $request.page
-     *         next: $response.next
+     *         cursor: $request.cursor
+     *         next_cursor: $response.next
      *         results: $response.results
      *
      * Alternatively, if the configuration shown above is
@@ -83,8 +82,7 @@ export const FernOpenAPIExtension = {
      *
      * Example usage:
      *   x-fern-pagination:
-     *     type: "offset"
-     *     page: $request.page
+     *     offset: $request.page_number
      *     results: $response.results
      *
      *   paths:
