@@ -494,13 +494,17 @@ function resolvedTypeHasProperty({
     if (objectSchema == null) {
         return false;
     }
-    // TODO: We need to support extended properties here.
-    const property = objectSchema.properties?.[propertyComponents[0] ?? ""];
+    const property = getPropertyTypeFromObjectSchema({
+        typeResolver,
+        file,
+        objectSchema,
+        property: propertyComponents[0] ?? ""
+    });
     if (property == null) {
         return false;
     }
     const resolvedTypeProperty = typeResolver.resolveType({
-        type: typeof property === "string" ? property : property.type,
+        type: property,
         file
     });
     return resolvedTypeHasProperty({
@@ -510,6 +514,65 @@ function resolvedTypeHasProperty({
         propertyComponents: propertyComponents.slice(1),
         validate
     });
+}
+
+function getPropertyTypeFromObjectSchema({
+    typeResolver,
+    file,
+    objectSchema,
+    property
+}: {
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+    objectSchema: RawSchemas.ObjectSchema;
+    property: string;
+}): string | undefined {
+    const properties = getAllPropertiesForRawObjectSchema(objectSchema, file, typeResolver);
+    return properties[property];
+}
+
+function getAllPropertiesForRawObjectSchema(
+    objectSchema: RawSchemas.ObjectSchema,
+    file: FernFileContext,
+    typeResolver: TypeResolver
+): Record<string, string> {
+    let extendedTypes: string[] = [];
+    if (typeof objectSchema.extends === "string") {
+        extendedTypes = [objectSchema.extends];
+    } else if (Array.isArray(objectSchema.extends)) {
+        extendedTypes = objectSchema.extends;
+    }
+
+    const properties: Record<string, string> = {};
+    for (const extendedType of extendedTypes) {
+        const extendedProperties = getAllPropertiesForExtendedType(extendedType, file, typeResolver);
+        Object.entries(extendedProperties).map(([propertyKey, propertyType]) => {
+            properties[propertyKey] = propertyType;
+        });
+    }
+
+    if (objectSchema.properties != null) {
+        Object.entries(objectSchema.properties).map(([propertyKey, propertyType]) => {
+            properties[propertyKey] = typeof propertyType === "string" ? propertyType : propertyType.type;
+        });
+    }
+
+    return properties;
+}
+
+async function getAllPropertiesForExtendedType(
+    extendedType: string,
+    file: FernFileContext,
+    typeResolver: TypeResolver
+): Promise<Record<string, string>> {
+    const resolvedType = typeResolver.resolveNamedTypeOrThrow({
+        referenceToNamedType: extendedType,
+        file
+    });
+    if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
+        return getAllPropertiesForRawObjectSchema(resolvedType.declaration, file, typeResolver);
+    }
+    return {};
 }
 
 function resolveResponseType({
