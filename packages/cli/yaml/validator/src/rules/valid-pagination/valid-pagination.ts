@@ -560,11 +560,11 @@ function getAllPropertiesForRawObjectSchema(
     return properties;
 }
 
-async function getAllPropertiesForExtendedType(
+function getAllPropertiesForExtendedType(
     extendedType: string,
     file: FernFileContext,
     typeResolver: TypeResolver
-): Promise<Record<string, string>> {
+): Record<string, string> {
     const resolvedType = typeResolver.resolveNamedTypeOrThrow({
         referenceToNamedType: extendedType,
         file
